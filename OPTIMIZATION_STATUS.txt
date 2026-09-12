@@ -1,0 +1,17 @@
+Exact-search optimization v4
+
+Added:
+- compact.js: 36-byte board encoding + 64-bit numeric position hashing.
+- openingJobs.js: splits the initial position into independent opening branches.
+
+Purpose:
+The earlier object/string-key implementation spent substantial time allocating
+objects and long string hashes. This layer lets the graph solver use compact
+numeric keys and makes it straightforward to distribute the 15 opening moves
+across workers.
+
+Research discipline:
+- No opening is called best from a depth-limited score.
+- A branch is only classified when its game-theoretic W/D/L value is exact.
+- Root best move is selected only after all relevant opening branches have
+  exact values (and distance-to-win / distance-to-loss for tie-breaking).

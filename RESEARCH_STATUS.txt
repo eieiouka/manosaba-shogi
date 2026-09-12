@@ -1,0 +1,31 @@
+Manosaba Shogi exact research status
+
+This version adds:
+- shared rules engine fixes used by the solver
+- exact reachable-position graph builder
+- retrograde W/D/L solver
+- principal-variation extraction
+
+Important rule-engine fixes included:
+- Emma is never actually capturable; attacks on Emma are used only for check legality.
+- Nanoka cannot promote merely by shooting.
+- duplicate drops of identical held piece types are removed from move generation.
+- promoted Sherry's retained two-square forward move can capture on the landing square if the intermediate square is empty.
+
+Exact solving method:
+1. Enumerate every reachable position from the initial state, merging identical positions.
+2. Mark terminal losses.
+3. Retrograde:
+   - a position is WIN if it has any move to LOSS;
+   - a position is LOSS if all moves go to WIN;
+   - positions left in cycles after propagation are DRAW.
+4. Store distance-to-result so a winning side selects the shortest forced win and a losing side delays defeat.
+5. Extract the principal variation from the initial position.
+
+Prototype benchmark in this session:
+- Initial position: 15 legal moves.
+- A graph-building test reached about 989,000 unique positions after expanding about 150,000 positions.
+- The complete reachable graph was therefore not yet exhausted in that benchmark.
+- No best opening move is claimed until the root position is solved exactly.
+
+Only a completed graph + retrograde result should be treated as '読み切り'.
