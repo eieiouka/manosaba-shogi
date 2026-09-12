@@ -5,21 +5,9 @@ import {
   terminalResult,
   actionLabel,
 } from './rules.js';
+import { canonicalExactKey } from './compact.js';
 
-function pieceCode(p) {
-  if (!p) return '.';
-  const s = p.side === 'sente' ? 's' : 'g';
-  const t = ({ema:'e',nanoka:'n',hanna:'h',hiro:'i',sherry:'s',margo:'m'})[p.type];
-  return s+t+(p.promoted?'1':'0');
-}
-function handKey(hand) {
-  const cnt = {ema:0,nanoka:0,hanna:0,hiro:0,sherry:0,margo:0};
-  for (const p of hand) cnt[p.type]++;
-  return `${cnt.nanoka}${cnt.hanna}${cnt.hiro}${cnt.sherry}${cnt.margo}`;
-}
-export function keyOf(st) {
-  return (st.turn==='sente'?'s':'g') + ':' + st.board.flat().map(pieceCode).join('') + ':' + handKey(st.hands.sente)+':'+handKey(st.hands.gote);
-}
+export const keyOf = canonicalExactKey;
 
 export function buildReachableGraph({maxStates=Infinity, onProgress=null}={}) {
   const root = makeInitialState();

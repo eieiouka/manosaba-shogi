@@ -1,0 +1,37 @@
+v8 exact typed-hash benchmark
+
+Measured in this session.
+
+200,000 discovered positions:
+  v7 CSR:
+    4.33 s
+    96.7 MB RSS
+    41.0 MB JS heap
+
+  v8 typed exact-key table:
+    2.26 s
+    71.0 MB RSS
+    8.44 MB JS heap
+
+1,000,000 discovered positions:
+  v7 CSR:
+    23.1 s
+    218 MB RSS
+    132.9 MB JS heap
+
+  v8 typed exact-key table:
+    11.80 s
+    157.4 MB RSS
+    10.95 MB JS heap
+
+What changed:
+- Removed Map<string,nodeId> from the graph builder.
+- Removed one 49-character JS string object per position.
+- Canonical positions are stored as exact 49-byte records in one Uint8Array.
+- Deduplication uses an open-addressed typed-array hash table.
+- Two 32-bit hashes are only filters; every candidate match is byte-compared,
+  so hash collisions cannot merge distinct game positions.
+- CSR edge storage from v7 is retained.
+
+This is an exactness-preserving optimization.
+No opening move is declared best from these capped graph benchmarks.

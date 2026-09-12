@@ -1,0 +1,39 @@
+Packed graph benchmark
+
+Same shared rules + symmetry key, measured in this session.
+
+200,000 discovered-position cap:
+  previous object-state graph:
+    expanded: 30,158
+    time:     6.20 s
+    RSS:      532 MB
+    heap:     461 MB
+
+  packed-key graph:
+    expanded: 29,704
+    time:     4.52 s
+    RSS:      110 MB
+    heap:      57 MB
+
+Memory reduction (RSS): about 79%
+Runtime reduction in this benchmark: about 27%
+
+1,000,000 discovered-position cap with packed graph:
+  expanded: 155,154
+  generated legal moves: 2,404,703
+  time: 24.4 s
+  RSS: 216 MB
+  heap: 153 MB
+
+A 3,000,000-position benchmark was started but did not complete within
+the 120-second execution window of this session, so no result is claimed for it.
+
+What changed:
+- Full JS state objects are no longer retained for every discovered node.
+- Each node stores only its exact compact canonical key.
+- A full state is reconstructed only when that node is expanded.
+- Edge actions are not permanently retained; only successor node IDs are kept.
+- PV action labels can be reconstructed later from the solved route.
+
+This keeps exactness while making multi-million-position searches much more
+realistic in memory.

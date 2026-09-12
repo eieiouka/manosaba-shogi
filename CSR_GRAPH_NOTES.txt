@@ -1,0 +1,16 @@
+Packed CSR graph v7
+
+Main change:
+- Forward edges are stored in one flat Uint32Array-like growable buffer.
+- Per-node edge JS arrays are removed.
+- Reverse predecessors are also built as flat CSR arrays only after the graph is complete.
+- Retrograde queue/result/distance are typed arrays.
+
+Why this matters:
+At millions of states, 'one JS Array per node' has very large object overhead even when
+those arrays contain only a few integers. CSR keeps essentially only integer payloads.
+
+Exactness:
+- Position identity still uses the complete canonical exact key.
+- Symmetry deduplication remains enabled.
+- W/D/L is only produced when the reachable graph is complete.

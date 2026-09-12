@@ -1,0 +1,24 @@
+CSR edge-storage benchmark
+
+Measured in this session with the same rules and symmetry canonicalization.
+
+200,000 discovered positions:
+  v6 packed graph:
+    about 4.52 s, 110 MB RSS, 57 MB heap
+  v7 CSR graph:
+    4.33 s, 96.7 MB RSS, 41.0 MB heap
+
+1,000,000 discovered positions:
+  v6 packed graph:
+    24.4 s, 216 MB RSS, 153 MB heap
+  v7 CSR graph:
+    23.1 s, 218 MB RSS, 132.9 MB heap
+
+The main gain is lower JS object/heap overhead:
+- no per-node successor arrays
+- one flat successor buffer
+- flat reverse-predecessor CSR for retrograde solving
+- typed-array result, distance, degree, and queue storage
+
+At one million positions, graph generation is still incomplete; no opening move
+is claimed best from this benchmark.
