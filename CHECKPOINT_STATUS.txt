@@ -1,0 +1,17 @@
+Checkpointable exact graph builder v9
+
+Verified in this session:
+- Phase 1: 500,004 discovered positions, 51,118 expanded, 799,020 edges.
+- Saved to disk, process state discarded, checkpoint reloaded.
+- Phase 2: resumed correctly to 1,000,002 discovered positions, 104,921 expanded, 1,635,551 edges.
+- A fresh exact checkpoint was then advanced to 2,000,002 discovered positions:
+  expanded: 217,889
+  edges/legal moves generated: 3,361,860
+  elapsed for that run: about 24.85 s
+  complete: false
+
+Checkpoint directory used in this session:
+/mnt/data/manosaba-exact-checkpoint-v9
+
+The graph can now be advanced in bounded chunks instead of losing all work when a single execution window ends.
+No best opening move is claimed yet because the reachable graph is not complete.

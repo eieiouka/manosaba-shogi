@@ -1,0 +1,22 @@
+v11 atomic checkpoint + recovery-safe exploration
+
+Checkpoint safety changes:
+- save into a separate temporary directory
+- fsync all major files
+- validate exact file sizes against meta.json
+- rename old checkpoint to .bak only after the new checkpoint is complete
+- atomically swap the validated temporary checkpoint into place
+- if swap/validation fails, restore the previous checkpoint
+
+Because the prior checkpoint's keys.u8 had already become 0 bytes, that data
+could not be safely resumed. v11 therefore restarted the exact search from the
+initial position using the same corrected rules engine.
+
+Verified exact-search progress in this session:
+- 2,500,003 unique states / 277,915 expanded / 4,299,906 legal moves
+- rehashed exact table 4,194,304 -> 8,388,608 slots
+- 5,000,004 unique states / 552,497 expanded / 8,639,977 legal moves
+- complete: false
+
+Current safe checkpoint:
+/mnt/data/manosaba-exact-checkpoint-v11

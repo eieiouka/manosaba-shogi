@@ -1,0 +1,12 @@
+import fs from 'node:fs';
+import { createCheckpointGraph, continueCheckpointGraph, saveCheckpoint, loadCheckpoint, graphSnapshot } from './src/game/checkpointGraph.js';
+const dir='./.checkpoint-test';
+fs.rmSync(dir,{recursive:true,force:true});
+let g=createCheckpointGraph();
+continueCheckpointGraph(g,{maxStates:500000});
+console.log('phase1',graphSnapshot(g));
+saveCheckpoint(g,dir);
+g=loadCheckpoint(dir);
+continueCheckpointGraph(g,{maxStates:1000000});
+console.log('phase2',graphSnapshot(g));
+fs.rmSync(dir,{recursive:true,force:true});

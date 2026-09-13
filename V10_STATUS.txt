@@ -1,0 +1,12 @@
+v10 segmented checkpoint continuation
+
+Fix:
+- Existing keys.u8 is loaded once and retained as the immutable base segment.
+- Newly discovered 49-byte position keys go into separate fixed-size chunks.
+- Loading no longer allocates and copies a second 1.2GB key array.
+- Hash-table growth is deferred to 90% load to avoid an immediate multi-hundred-MB rehash.
+
+Verified continuation in this session:
+Start: 24,893,971 states / 2,850,114 expanded / 45,253,694 edges.
+After two 100,000-expansion runs: 26,636,016 states / 3,050,114 expanded / 48,309,980 edges.
+Checkpoint saved successfully after both runs.
