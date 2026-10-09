@@ -46,6 +46,5 @@ export function useOnline(onMatch,onLobby){
  }
  async function move(action){try{await post('/move',{id:match.id,revision:match.revision,action});setError('')}catch(e){setError(e.message)}}
  async function resign(){try{await post('/resign',{id:match.id})}catch(e){setError(e.message)}}
- function resetNickname(){try{localStorage.removeItem('manosaba-nickname')}catch{return false}setNickname('');return true}
- return {resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
+ return {nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
 }

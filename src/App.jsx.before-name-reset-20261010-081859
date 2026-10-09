@@ -2,7 +2,6 @@ import {useEffect,useMemo,useRef,useState} from "react";
 import "./App.css";
 import "./online/online.css";
 import {useOnline} from "./online/useOnline.js";
-import NicknameReset from "./online/NicknameReset.jsx";
 import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,applyLegalAction,terminalResult,isEmmaInCheck} from "./game/rules.js";
 import {stateKey} from "./game/aiEngine.js";
 
@@ -348,7 +347,6 @@ export default function App(){
  const tryFrom=showTryArrow?toVisual(arrowFrom):null,tryTo=showTryArrow?toVisual(arrowTo):null;
 
  if(!started)return <main className="title-screen">
-  <NicknameReset onReset={online.resetNickname}/>
   <div className="title-screen__shade" aria-hidden="true"/>
  <h2 className="title-screen__logo"><span style={{display:"block",fontSize:"50%",lineHeight:1.5}}>【非公式作品】<br />計画性のないナノカちゃん作</span>魔法少女ノ魔法将棋</h2>
  <div className="title-screen__actions">
