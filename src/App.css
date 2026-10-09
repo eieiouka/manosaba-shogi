@@ -13,7 +13,7 @@ button { font: inherit; }
 
 .title-screen {
   --title-art-height: 46.9436vw;
-  --title-logo-y: -1vw;
+  --title-logo-y: -7vw;
   --title-actions-y: 13.15vw;
   position: relative; width: 100%; min-height: 100svh; overflow: hidden;
   background-color: #000;

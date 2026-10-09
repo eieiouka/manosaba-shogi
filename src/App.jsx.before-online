@@ -1,7 +1,5 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 import "./App.css";
-import "./online/online.css";
-import {useOnline} from "./online/useOnline.js";
 import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,applyLegalAction,terminalResult,isEmmaInCheck} from "./game/rules.js";
 import {stateKey} from "./game/aiEngine.js";
 
@@ -78,7 +76,6 @@ function HowToPlayDialog({onClose}){
 export default function App(){
  const initial=useMemo(()=>makeInitialState(),[]);
  const [started,setStarted]=useState(false);
- const [mode,setMode]=useState("ai");
  const [humanSide,setHumanSide]=useState("sente");
  const opponentSide=humanSide==="sente"?"gote":"sente";
  const [timeline,setTimeline]=useState([initial]);
@@ -98,22 +95,7 @@ export default function App(){
  const worker=useRef(null),request=useRef(0),motionFxRef=useRef(null),motionSequence=useRef(0),backgroundMusic=useRef(null);
  const guideTimer=useRef(null),guideTriggered=useRef(false);
  const state=timeline[timeline.length-1];
- const online=useOnline(data=>{
-  if(data.action)beginMotion(data.action,state);
-  request.current++;worker.current?.postMessage({type:"reset"});
-  setMode("online");setHumanSide(data.side);setThinking(false);setSelected(null);setHandType(null);setResigned(false);
-  if(!started||mode!=="online"||online.match?.id!==data.id){
-   setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);motionFxRef.current=null;
-   if(!backgroundMusic.current){backgroundMusic.current=new Audio("/audio/新BGM.mp3");backgroundMusic.current.loop=true}
-   backgroundMusic.current.volume=.3;backgroundMusic.current.play().catch(()=>{});
-  }
-  setTimeline([data.state]);setStarted(true);
- },()=>{
-  if(!backgroundMusic.current){backgroundMusic.current=new Audio("/audio/新BGM.mp3");backgroundMusic.current.loop=true}
-  backgroundMusic.current.volume=.3;backgroundMusic.current.play().catch(()=>{});
- });
- const result=useMemo(()=>mode==="online"?online.match?.result:terminalResult(state),[state,mode,online.match]);
- const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
+ const result=useMemo(()=>terminalResult(state),[state]);
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
  const seen=useMemo(()=>timeline.map(stateKey),[timeline]);
@@ -146,9 +128,6 @@ export default function App(){
  useEffect(()=>{setPieceGuide(null);guideTriggered.current=false},[state]);
  useEffect(()=>{
   if(!result||motionFx)return;
-  if(!["ema-safe-try","checkmate","no-legal-move"].includes(result.reason)){
-   setFinishFxDone(true);setResultRevealReady(true);return;
-  }
   const losingSide=result.winner===humanSide?opponentSide:humanSide;
   const timers=[];let cancelled=false;
   const wait=ms=>new Promise(resolve=>timers.push(setTimeout(resolve,ms)));
@@ -187,7 +166,7 @@ export default function App(){
   return()=>clearTimeout(timer);
  },[result,finishFxDone,humanSide]);
  useEffect(()=>{
-  if(mode==="online"||!started||gameOver||!worker.current)return;
+  if(!started||gameOver||!worker.current)return;
   if(state.turn===humanSide){worker.current.postMessage({type:"ponder",state,seen,minDepth:difficultyDepth});return}
   setThinking(true);
   const id=++request.current;
@@ -208,15 +187,15 @@ export default function App(){
   };
   const effectRemainingMs=Math.max(0,effectEndsAt-performance.now());
   worker.current.postMessage({type:"think",id,state,seen,timeLimitMs:effectRemainingMs+1000,minDepth:difficultyDepth});
- },[state,gameOver,seen,humanSide,started,difficultyDepth,mode]);
+ },[state,gameOver,seen,humanSide,started,difficultyDepth]);
 
  async function commitAction(action,before){
   await beginMotion(action,before);
   setTimeline(x=>[...x,applyLegalAction(x[x.length-1],action)]);
  }
  function play(action){
-  if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver)return;
-  if(mode==="online")online.move(action);else commitAction(action,state);
+  if(thinking||motionFx||state.turn!==humanSide||gameOver)return;
+  commitAction(action,state);
   setSelected(null);setHandType(null);
  }
  function beginPieceGuide(piece,row,col){
@@ -233,7 +212,7 @@ export default function App(){
  function click(row,col){
   if(guideTriggered.current){guideTriggered.current=false;return}
   if(pieceGuide){setPieceGuide(null);return}
-  if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver)return;
+  if(thinking||motionFx||state.turn!==humanSide||gameOver)return;
   const choices=selectable.filter(a=>a.to[0]===row&&a.to[1]===col);
   if(choices.length){play(choices.find(a=>a.magic)||choices[0]);return}
   const piece=state.board[row][col];
@@ -241,14 +220,12 @@ export default function App(){
  }
  async function resign(){
   if(gameOver)return;
-  if(mode==="online"){await online.resign();return}
   request.current++;
  worker.current?.postMessage({type:"reset"});
   
   setThinking(false);setSelected(null);setHandType(null);setResigned(true);
  }
  async function startNewMatch(depth){
-  setMode("ai");
   request.current++;
   worker.current?.postMessage({type:"reset"});
   if(!backgroundMusic.current){
@@ -284,7 +261,7 @@ export default function App(){
  }
 
  const targets=new Map(selectable.map(a=>[`${a.to[0]},${a.to[1]}`,a]));
- const endMessage=resigned?"敗北…":result&&finishFxDone&&resultRevealReady?(result.winner===null?"引き分け":result.winner===humanSide?"勝利！":"敗北…"):"";
+ const endMessage=resigned?"敗北…":result&&finishFxDone&&resultRevealReady?(result.winner===humanSide?"勝利！":"敗北…"):"";
  const pieceFxClass=piece=>{
   if(!piece||piece.type!=="ema"||!finishFx)return"";
   if((finishFx.phase==="try-transform"||finishFx.phase==="try-arrow")&&piece.side===finishFx.winner)return" ema--try-glow";
@@ -350,11 +327,9 @@ export default function App(){
   <div className="title-screen__shade" aria-hidden="true"/>
  <h2 className="title-screen__logo"><span style={{display:"block",fontSize:"50%",lineHeight:1.5}}>【非公式作品】<br />計画性のないナノカちゃん作</span>魔法少女ノ魔法将棋</h2>
  <div className="title-screen__actions">
-   <button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>AI対戦</button>
-   <button className="title-screen__start" onClick={()=>online.queue()} disabled={online.status==="connecting"||online.status==="queued"}>オンライン対戦</button>
+   <button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>ゲーム開始</button>
    <a className="title-screen__shop" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a>
   </div>
-  <OnlineLobby online={online}/>
   {difficultyPrompt&&<DifficultyDialog onChoose={startNewMatch} onCancel={()=>setDifficultyPrompt(null)}/>} 
  </main>;
 
@@ -363,45 +338,14 @@ export default function App(){
    <div className="branding"><div className="eyebrow">MANOSABA SHOGI AI</div><h1>魔法少女ノ魔法将棋</h1></div>
    <div className="match-actions"><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></div>
   </header>
-  {mode==="online"&&<div className="online-bar" role="status">
-   <div className="online-bar__opponent">VS {online.match?.nicknames?.[opponentSide]||"相手"}</div>
-   <div className="online-bar__clock">{online.match?.result?"対局終了":online.match?.paused?"再接続待ち":online.now<online.match?.readyAt?"準備中…":state.turn===humanSide?`残り${online.remaining}秒`:"\u00a0"}</div>
-   {online.error&&<span>{online.error}</span>}
-  </div>}
-  <OnlineLobby online={online}/>
   <main className="game-stage">
    <Hand className="hand--opponent" title="相手の持ち駒" pieces={visibleHand(opponentSide)} disabled activeType={null} onPick={()=>{}} perspective={humanSide} reverse onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
-   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${pieceGuide?.row===r&&pieceGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div><div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{backgroundMusic.current?.pause();setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
-   <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
+   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${pieceGuide?.row===r&&pieceGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div><div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>setDifficultyPrompt("rematch")}>再対局</button><a className="result-overlay__friend" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
+   <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={state.turn!==humanSide||thinking||motionFx||gameOver} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    <button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>
   </main>
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
   {showHowTo&&<HowToPlayDialog onClose={()=>setShowHowTo(false)}/>} 
   {difficultyPrompt&&<DifficultyDialog onChoose={startNewMatch} onCancel={()=>setDifficultyPrompt(null)}/>} 
- </div>;
-}
-
-function OnlineLobby({online}){
- const [draft,setDraft]=useState("");
- const naming=online.status==="naming";
- const waiting=online.status==="queued"||online.status==="connecting";
- useEffect(()=>{if(naming)setDraft(Array.from(online.nickname||"").slice(0,10).join(""))},[naming,online.nickname]);
- if(!naming&&!waiting&&(!online.error||online.status==="match"))return null;
- return <div className="online-lobby">
-  <section className="online-lobby__panel" aria-label="対戦ロビー">
-   <h2>対戦ロビー</h2>
-   {naming?<form onSubmit={event=>{event.preventDefault();online.submitNickname(draft)}}>
-    <label htmlFor="online-nickname">ニックネーム</label>
-    <input id="online-nickname" value={draft} onChange={event=>setDraft(Array.from(event.target.value).slice(0,10).join(""))} autoFocus autoComplete="nickname" placeholder="10文字以内"/>
-    <div className="online-lobby__count">{Array.from(draft).length}/10</div>
-    {online.error&&<p role="alert">{online.error}</p>}
-    <button type="submit" disabled={!draft.trim()}>対戦相手を探す</button>
-    <button type="button" onClick={online.cancel}>戻る</button>
-   </form>:<>
-    <p role="status">{waiting?(online.status==="connecting"?"サーバーに接続しています…":"対戦相手を探しています…"):online.error}</p>
-    {!waiting&&<button onClick={online.queue}>再試行</button>}
-    {waiting&&<button onClick={online.cancel} disabled={online.status==="connecting"}>キャンセル</button>}
-   </>}
-  </section>
  </div>;
 }

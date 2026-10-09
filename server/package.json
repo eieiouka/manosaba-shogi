@@ -1,0 +1,1 @@
+{"name":"manosaba-online-server","private":true,"type":"module","scripts":{"start":"node index.js","test":"node --test ../tests/server.test.mjs"},"engines":{"node":">=22"}}

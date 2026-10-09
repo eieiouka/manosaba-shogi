@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: manosaba-online
+    runtime: node
+    plan: starter
+    buildCommand: echo "No dependencies"
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.16.0
+      - key: ALLOWED_ORIGINS
+        sync: false

@@ -108,9 +108,6 @@ export default function App(){
    backgroundMusic.current.volume=.3;backgroundMusic.current.play().catch(()=>{});
   }
   setTimeline([data.state]);setStarted(true);
- },()=>{
-  if(!backgroundMusic.current){backgroundMusic.current=new Audio("/audio/新BGM.mp3");backgroundMusic.current.loop=true}
-  backgroundMusic.current.volume=.3;backgroundMusic.current.play().catch(()=>{});
  });
  const result=useMemo(()=>mode==="online"?online.match?.result:terminalResult(state),[state,mode,online.match]);
  const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
@@ -364,8 +361,9 @@ export default function App(){
    <div className="match-actions"><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></div>
   </header>
   {mode==="online"&&<div className="online-bar" role="status">
-   <div className="online-bar__opponent">VS {online.match?.nicknames?.[opponentSide]||"相手"}</div>
-   <div className="online-bar__clock">{online.match?.result?"対局終了":online.match?.paused?"再接続待ち":online.now<online.match?.readyAt?"準備中…":state.turn===humanSide?`残り${online.remaining}秒`:"\u00a0"}</div>
+   <div>{online.match?.nicknames?.[humanSide]||online.nickname} vs {online.match?.nicknames?.[opponentSide]||"相手"}</div>
+   {online.match?.result?({timeout:"時間切れ",resign:"投了",disconnected:"切断",repetition:"千日手"}[online.match.result.reason]||"対局終了"):
+    online.match?.paused?"再接続待ち（最大20秒）":online.now<online.match?.readyAt?"対局準備中…":`${state.turn===humanSide?"あなた":"相手"}の手番：${online.remaining}秒`}
    {online.error&&<span>{online.error}</span>}
   </div>}
   <OnlineLobby online={online}/>
@@ -382,26 +380,11 @@ export default function App(){
 }
 
 function OnlineLobby({online}){
- const [draft,setDraft]=useState("");
- const naming=online.status==="naming";
  const waiting=online.status==="queued"||online.status==="connecting";
- useEffect(()=>{if(naming)setDraft(Array.from(online.nickname||"").slice(0,10).join(""))},[naming,online.nickname]);
- if(!naming&&!waiting&&(!online.error||online.status==="match"))return null;
- return <div className="online-lobby">
-  <section className="online-lobby__panel" aria-label="対戦ロビー">
-   <h2>対戦ロビー</h2>
-   {naming?<form onSubmit={event=>{event.preventDefault();online.submitNickname(draft)}}>
-    <label htmlFor="online-nickname">ニックネーム</label>
-    <input id="online-nickname" value={draft} onChange={event=>setDraft(Array.from(event.target.value).slice(0,10).join(""))} autoFocus autoComplete="nickname" placeholder="10文字以内"/>
-    <div className="online-lobby__count">{Array.from(draft).length}/10</div>
-    {online.error&&<p role="alert">{online.error}</p>}
-    <button type="submit" disabled={!draft.trim()}>対戦相手を探す</button>
-    <button type="button" onClick={online.cancel}>戻る</button>
-   </form>:<>
-    <p role="status">{waiting?(online.status==="connecting"?"サーバーに接続しています…":"対戦相手を探しています…"):online.error}</p>
-    {!waiting&&<button onClick={online.queue}>再試行</button>}
-    {waiting&&<button onClick={online.cancel} disabled={online.status==="connecting"}>キャンセル</button>}
-   </>}
-  </section>
+ if(!waiting&&(!online.error||online.status==="match"))return null;
+ return <div className="online-lobby" role="status">
+  <p>{waiting?(online.status==="connecting"?"サーバーに接続しています…":"対戦相手を探しています…"):online.error}</p>
+  {!waiting&&<button onClick={online.queue}>再試行</button>}
+  {waiting&&<button onClick={online.cancel} disabled={online.status==="connecting"}>キャンセル</button>}
  </div>;
 }
