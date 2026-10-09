@@ -229,7 +229,7 @@ export default function App(){
   request.current++;
   worker.current?.postMessage({type:"reset"});
   if(!backgroundMusic.current){
-   backgroundMusic.current=new Audio("/audio/Halloween_Waltz.mp3");
+   backgroundMusic.current=new Audio("/audio/新BGM.mp3");
    backgroundMusic.current.loop=true;
   }
   backgroundMusic.current.volume = 0.3; // 30%
