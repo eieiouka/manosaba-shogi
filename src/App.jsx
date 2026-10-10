@@ -411,7 +411,7 @@ function OnlineLobby({online,background=false,onCpu}){
     <button type="button" onClick={online.cancel}>戻る</button>
    </form>:<>
     <p role="status">{waiting?(online.status==="connecting"?"サーバーに接続しています…":"対戦相手を探しています…"):online.error}</p>
-    {!waiting&&<button onClick={online.queue}>再試行</button>}
+    {!waiting&&<button onClick={online.editNickname}>再試行</button>}
     {online.status==="queued"&&<>
      <button type="button" onClick={onCpu}>待ちながらCPUと対戦</button>
      <p>相手が見つかるとCPU戦を終了し、オンライン戦に切り替わります。</p>
