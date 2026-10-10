@@ -24,3 +24,13 @@ button.nickname-reset-button {
 button.nickname-reset-button:hover:not(:disabled) {
   background: #c5efff !important;
 }
+
+button.nickname-reset-button {
+  box-sizing: border-box;
+  font-size: clamp(12px, 1.7vw, 24px) !important;
+  padding: clamp(8px, 1.1vw, 16px) clamp(14px, 2vw, 32px) !important;
+  border-radius: clamp(8px, 1vw, 14px) !important;
+  line-height: 1.4;
+  max-width: calc(100vw - 32px);
+  font-weight: 700;
+}
