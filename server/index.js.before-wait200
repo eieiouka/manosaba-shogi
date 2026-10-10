@@ -25,11 +25,11 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
  const connected=p=>Boolean(p.stream&&!p.stream.destroyed&&!p.stream.writableEnded);
  const presence=()=>{
   const ongoing=[...matches.values()].filter(m=>!m.result&&!m.paused&&m.players.every(connected));
-  const oldest=ongoing.length?Math.min(...ongoing.map(m=>m.startedAt)):null;
+  const maxMoves=ongoing.length?Math.max(...ongoing.map(m=>m.revision)):null;
   for(const p of sessions.values())if(connected(p)){
-   if(!Number.isInteger(p.waitEstimateSeed)||p.waitEstimateSeed<170||p.waitEstimateSeed>190)p.waitEstimateSeed=randomInt(170,191);
-   const seconds=oldest===null?p.waitEstimateSeed:Math.max(10,Math.ceil(200-(Date.now()-oldest)/1000));
-   if(p.waitEstimateSeconds!==seconds){p.waitEstimateSeconds=seconds;send(p,{type:'wait-estimate',seconds})}
+   p.waitEstimateSeed??=randomInt(55,66);
+   const seconds=maxMoves===null?p.waitEstimateSeed:maxMoves===0?60:Math.max(10,maxMoves*2);
+   if(p.waitEstimateSeconds!==seconds){p.waitEstimateSeconds=seconds;send(p,{type:'wait-estimate',seconds:seconds*2})}
   }
  };
  const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false};
@@ -124,7 +124,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
    if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
    try{profiles.name(profile,nickname)}catch(e){json(e.code==='nickname-taken'?409:503,{error:e.code==='nickname-taken'?e.message:'プロフィールを保存できません',code:e.code});return}
    p.profile=profile;p.nickname=nickname;
-   p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(170,191);p.waitEstimateSeconds=undefined;queue.push(p)}send(p,{type:'queued'});match();json(200,{ok:true});return;
+   p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(55,66);p.waitEstimateSeconds=undefined;queue.push(p)}send(p,{type:'queued'});match();json(200,{ok:true});return;
   }
   if(url.pathname==='/cancel'){removeQueue(p);send(p,{type:'idle'});json(200,{ok:true});return}
   const m=p.match;if(!m||body.id!==m.id){json(409,{error:'対局がありません'});return}settle(m);
