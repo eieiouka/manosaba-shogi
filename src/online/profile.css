@@ -54,3 +54,16 @@ button.nickname-reset-button {
   font-weight: 900 !important;
   letter-spacing: .13em !important;
 }
+
+@media (max-width: 600px) {
+  button.nickname-reset-button {
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    font-size: 4.6875vw !important;
+    padding: 3.125vw 6.25vw !important;
+    border-radius: 2.735vw !important;
+    white-space: nowrap;
+    text-align: center;
+  }
+}
