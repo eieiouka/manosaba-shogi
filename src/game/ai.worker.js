@@ -72,13 +72,13 @@ async function runEngine(state,seen,target,timeLimitMs,minDepth,selectiveDepth=0
   return bestAction(state,seen,target,{timeLimitMs,minDepth,tt:sharedTT});
 }
 
-async function ponder(state,seen,token){
+async function ponder(state,seen,token,maxDepth=UNBOUNDED_DEPTH){
   if(token!==ponderToken)return;
   try{
-    const result=await runEngine(state,seen,UNBOUNDED_DEPTH,180,3,0,false);
+    const result=await runEngine(state,seen,maxDepth,180,Math.min(3,maxDepth),0,false);
     deepestPonder=Math.max(deepestPonder,result?.depth??1);
   }catch{}
-  if(token===ponderToken)setTimeout(()=>ponder(state,seen,token),0);
+  if(token===ponderToken)setTimeout(()=>ponder(state,seen,token,maxDepth),0);
 }
 
 self.onmessage=async({data})=>{
@@ -88,7 +88,7 @@ self.onmessage=async({data})=>{
     if(data.maxDepth===5)return;
     deepestPonder=1;
     if(await fairyReady)return;
-    setTimeout(()=>ponder(data.state,data.seen,token),0);
+    setTimeout(()=>ponder(data.state,data.seen,token,data.maxDepth??UNBOUNDED_DEPTH),0);
     return
   }
   try{

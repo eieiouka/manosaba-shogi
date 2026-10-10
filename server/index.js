@@ -1,20 +1,61 @@
 import http from 'node:http';
 import {pathToFileURL} from 'node:url';
-import {randomUUID, randomInt} from 'node:crypto';
+import {randomUUID, randomInt,createHash,timingSafeEqual} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {createHistory} from './history.js';
 import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite} from '../src/game/rules.js';
 export const key = s => JSON.stringify([s.turn,s.board.map(r=>r.map(p=>p&&[p.type,p.side,p.promoted])),['sente','gote'].map(side=>s.hands[side].map(p=>p.type).sort())]);
-export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000}={}) {
+export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,adminPassword=process.env.ADMIN_PASSWORD||'',historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
  const sessions=new Map(),matches=new Map(),queue=[];
+ const history=createHistory(historyPath);
+ const adminEnabled=adminPassword.length>=16;
+ const digest=value=>createHash('sha256').update(value).digest();
+ const adminHash=digest(adminPassword);
+ const adminFailures=new Map();
+ const adminHtml=readFileSync(new URL('./admin.html',import.meta.url));
  const send=(p,event)=>{if(p.stream&&!p.stream.destroyed&&!p.stream.writableEnded)p.stream.write(`data: ${JSON.stringify({...event,serverNow:Date.now()})}\n\n`)};
  const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false};
  const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames});
  const broadcast=(m,extra={})=>m.players.forEach((p,i)=>send(p,{...snapshot(m),side:i===0?'sente':'gote',...extra}));
- const finish=(m,winner,reason)=>{if(m.result)return;m.result={winner,reason};m.deadline=null;m.readyAt=null;m.paused=false;broadcast(m);m.finishedAt=Date.now()};
+ const finish=(m,winner,reason)=>{if(m.result)return;m.result={winner,reason};m.deadline=null;m.readyAt=null;m.paused=false;broadcast(m);m.finishedAt=Date.now();history.end(m)};
  const settle=m=>{if(!m.result&&!m.paused&&Date.now()>=m.deadline)finish(m,opposite(m.state.turn),'timeout')};
  const pause=m=>{if(m.result||m.paused)return;settle(m);if(m.result)return;const now=Date.now();m.remaining=Math.max(0,m.deadline-Math.max(now,m.readyAt));m.delay=Math.max(0,m.readyAt-now);m.paused=true;m.deadline=null;broadcast(m)};
  const resume=m=>{if(m.result||!m.paused||m.players.some(p=>!p.stream))return;m.readyAt=Date.now()+m.delay;m.deadline=m.readyAt+m.remaining;m.paused=false;broadcast(m)};
- const match=()=>{while(queue.length>=2){const a=queue.shift(),b=queue.shift();a.queued=b.queued=false;const players=randomInt(2)?[a,b]:[b,a],state=makeInitialState(),readyAt=Date.now()+startDelayMs;const m={id:randomUUID(),players,nicknames:{sente:players[0].nickname,gote:players[1].nickname},state,revision:0,result:null,readyAt,deadline:readyAt+turnMs,paused:false,seen:new Map([[key(state),1]])};matches.set(m.id,m);players.forEach(p=>p.match=m);broadcast(m)}};
+ const match=()=>{while(queue.length>=2){const a=queue.shift(),b=queue.shift();a.queued=b.queued=false;const players=randomInt(2)?[a,b]:[b,a],state=makeInitialState(),readyAt=Date.now()+startDelayMs;const m={id:randomUUID(),startedAt:Date.now(),players,nicknames:{sente:players[0].nickname,gote:players[1].nickname},state,revision:0,result:null,readyAt,deadline:readyAt+turnMs,paused:false,seen:new Map([[key(state),1]])};matches.set(m.id,m);history.start(m);players.forEach(p=>p.match=m);broadcast(m)}};
  const server=http.createServer(async(req,res)=>{
+  const requestUrl=new URL(req.url,'http://localhost');
+  if(requestUrl.pathname==='/admin'||requestUrl.pathname.startsWith('/admin/')){
+   res.setHeader('Cache-Control','no-store');res.setHeader('X-Frame-Options','DENY');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Content-Type-Options','nosniff');
+   const adminJson=(code,data)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data))};
+   if(!adminEnabled){adminJson(503,{error:'管理画面は未設定です。ADMIN_PASSWORDを16文字以上で設定してください'});return}
+   if(req.method!=='GET'){adminJson(405,{error:'method not allowed'});return}
+   if(requestUrl.pathname==='/admin'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(adminHtml);return}
+   const ip=req.socket.remoteAddress||'unknown',now=Date.now();
+   const failed=adminFailures.get(ip);
+   if(failed&&now-failed.at<60000&&failed.count>=10){adminJson(429,{error:'1分後に再試行してください'});return}
+   const supplied=req.headers.authorization?.replace(/^Bearer /,'')||'';
+   if(!timingSafeEqual(adminHash,digest(supplied))){
+    if(adminFailures.size>1000)adminFailures.clear();
+    adminFailures.set(ip,{at:failed&&now-failed.at<60000?failed.at:now,count:failed&&now-failed.at<60000?failed.count+1:1});
+    adminJson(401,{error:'パスワードが違います'});return;
+   }
+   adminFailures.delete(ip);
+   const all=history.list();
+   const status=r=>r.result?'終了':matches.has(r.id)?'対局中':'中断（サーバー再起動）';
+   if(requestUrl.pathname==='/admin/matches'){
+    const search=(requestUrl.searchParams.get('q')||'').toLowerCase();
+    const rows=all.filter(r=>!search||Object.values(r.nicknames).some(n=>n.toLowerCase().includes(search))).sort((a,b)=>b.startedAt-a.startedAt);
+    const offset=Math.max(0,Math.trunc(Number(requestUrl.searchParams.get('offset'))||0));
+    const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'});
+    const today=day.format(now);
+    adminJson(200,{summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,storageError:history.storageError},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
+   }
+   if(requestUrl.pathname==='/admin/match'){
+    const r=history.get(requestUrl.searchParams.get('id'));
+    adminJson(r?200:404,r?{...r,status:status(r)}:{error:'対局がありません'});return;
+   }
+   adminJson(404,{error:'not found'});return;
+  }
   const origin=req.headers.origin;
   if(origin&&!origins.includes(origin)){res.writeHead(403).end();return}
   if(origin)res.setHeader('Access-Control-Allow-Origin',origin);
@@ -58,9 +99,10 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
   const signature=a=>JSON.stringify([a?.category,a?.from,a?.to,!!a?.promote,a?.magic,a?.handIndex]);
   const action=generateAllLegalActions(m.state).find(a=>signature(a)===signature(body.action));
   if(!action){json(400,{error:'不正な指し手です'});return}
+  history.move(m,side,action);
   m.state=applyLegalAction(m.state,action);m.revision++;m.result=terminalResult(m.state);
   const k=key(m.state),count=(m.seen.get(k)||0)+1;m.seen.set(k,count);if(!m.result&&count>=3)m.result={winner:null,reason:'repetition'};
-  m.readyAt=Date.now()+animationMs;m.deadline=m.result?null:m.readyAt+turnMs;if(m.result)m.finishedAt=Date.now();broadcast(m,{action});json(200,{ok:true});
+  m.readyAt=Date.now()+animationMs;m.deadline=m.result?null:m.readyAt+turnMs;if(m.result){m.finishedAt=Date.now();history.end(m)}broadcast(m,{action});json(200,{ok:true});
  });
  const tick=setInterval(()=>{const now=Date.now();for(const m of matches.values()){
   if(m.result){if(now-m.finishedAt>300000){matches.delete(m.id);m.players.forEach(p=>{if(p.match===m)p.match=null})}continue}
