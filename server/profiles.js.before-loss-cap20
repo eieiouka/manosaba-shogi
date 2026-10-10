@@ -19,7 +19,7 @@ export function createProfiles(file){
    const pair=m.players.map(p=>p.profile);if(!pair.every(Boolean)||pair[0].id===pair[1].id||db.processed[m.id])return null;
    const before=pair.map(p=>view(p));const old=pair.map(p=>({...p}));const outcome=m.result.winner===null?.5:m.result.winner==='sente'?1:0;
    const expected=1/(1+10**((pair[1].rating-pair[0].rating)/400));const rawDelta=Math.round(32*(outcome-expected));const delta=outcome===.5?rawDelta:(outcome===1?1:-1)*Math.max(10,Math.abs(rawDelta));
-   pair.forEach((p,i)=>{p.rating=Math.max(1000,p.rating+Math.max(-20,i===0?delta:-delta));if(outcome===.5)p.draws++;else if((i===0&&outcome===1)||(i===1&&outcome===0))p.wins++;else p.losses++});
+   pair.forEach((p,i)=>{p.rating=Math.max(1000,p.rating+(i===0?delta:-delta));if(outcome===.5)p.draws++;else if((i===0&&outcome===1)||(i===1&&outcome===0))p.wins++;else p.losses++});
    db.processed[m.id]=true;
    try{save()}catch(e){pair.forEach((p,i)=>Object.assign(p,old[i]));delete db.processed[m.id];throw e}
    return Object.fromEntries(pair.map((p,i)=>[i===0?'sente':'gote',{before:before[i],after:view(p),delta:p.rating-before[i].rating}]));
