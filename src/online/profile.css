@@ -67,3 +67,14 @@ button.nickname-reset-button {
     text-align: center;
   }
 }
+
+@media (max-width: 600px) {
+  button.nickname-reset-button {
+    position: absolute !important;
+    top: 50% !important;
+    bottom: auto !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+  }
+}
