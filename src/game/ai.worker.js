@@ -1,4 +1,4 @@
-﻿import {bestAction,createTranspositionTable} from "./aiEngine.js";
+import {bestAction,createTranspositionTable} from "./aiEngine.js";
 import {fairyMoveToAction,stateToFairyFen} from "./fairyCodec.js";
 
 const sharedTT=createTranspositionTable();
@@ -85,15 +85,16 @@ self.onmessage=async({data})=>{
   const token=++ponderToken;
   if(data.type==="reset"){sharedTT.clear();wasmEngine?.reset_engine?.();fairyWorker?.postMessage({type:"reset"});deepestPonder=1;return}
   if(data.type==="ponder"){
+    if(data.maxDepth===5)return;
     deepestPonder=1;
     if(await fairyReady)return;
     setTimeout(()=>ponder(data.state,data.seen,token),0);
     return
   }
   try{
-    const targetDepth=UNBOUNDED_DEPTH;
+    const targetDepth=data.maxDepth==null?UNBOUNDED_DEPTH:Math.max(1,Math.min(UNBOUNDED_DEPTH,Math.trunc(Number(data.maxDepth)||UNBOUNDED_DEPTH)));
     const timeLimitMs=Math.max(500,data.timeLimitMs??500);
-    const minDepth=Math.max(1,Math.min(31,Math.trunc(Number(data.minDepth)||15)));
+    const minDepth=Math.max(1,Math.min(targetDepth,31,Math.trunc(Number(data.minDepth)||15)));
     const startedAt=performance.now();
     const result=await runEngine(data.state,data.seen,targetDepth,timeLimitMs,minDepth,0);
     const elapsed=Math.max(1,performance.now()-startedAt);
