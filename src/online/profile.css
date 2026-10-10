@@ -1,0 +1,17 @@
+.player-profile-overlay{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:#000b;padding:16px;color:#eee}
+.player-profile-dialog{width:min(520px,100%);max-height:90svh;overflow:auto;background:#18191f;border:1px solid #b18b54;border-radius:18px;padding:24px;box-shadow:0 20px 70px #0009}
+.player-profile-dialog h2{margin:0;font-size:21px}.player-profile-dialog button{padding:7px 10px;border:1px solid #75634b;border-radius:7px;background:#29272a;color:#eee;cursor:pointer;font-size:13px}
+.player-profile-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}.player-profile-heading>div{display:flex;gap:8px}.player-profile-dialog .player-profile-reset{font-size:11px;color:#c9b6a0}
+.player-profile-name{text-align:center;font-size:22px;margin-top:24px;overflow-wrap:anywhere}.player-profile-rank{text-align:center;font-size:55px;font-weight:bold;color:#edc482;margin-top:10px}.player-profile-points{text-align:center;color:#c7b299;margin-top:0}
+.player-profile-progress{display:grid;gap:8px;text-align:center;color:#d5c9b7;font-size:13px}.player-profile-progress progress{width:100%;height:10px;accent-color:#d7ad67}
+.player-profile-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:24px 0}.player-profile-stats div{text-align:center;background:#23242d;border-radius:9px;padding:12px 4px}.player-profile-stats dt{font-size:11px;color:#bbb}.player-profile-stats dd{margin:8px 0 0;font-size:22px;font-weight:bold}.player-profile-note{font-size:12px;color:#b3a99a;line-height:1.8}.player-profile-error{color:#ffbe9a}
+@media(max-width:450px){.player-profile-dialog{padding:18px}.player-profile-heading h2{font-size:18px}.player-profile-stats dd{font-size:19px}}
+
+button.nickname-reset-button {
+  background: #303b4b !important;
+  color: #e6edf5 !important;
+  border: 1px solid #718096 !important;
+}
+button.nickname-reset-button:hover:not(:disabled) {
+  background: #42516a !important;
+}
