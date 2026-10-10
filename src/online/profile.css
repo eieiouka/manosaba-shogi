@@ -48,3 +48,9 @@ button.nickname-reset-button {
   min-width: 0 !important;
   min-height: 0 !important;
 }
+
+button.nickname-reset-button {
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", "Noto Serif JP", serif !important;
+  font-weight: 900 !important;
+  letter-spacing: .13em !important;
+}
