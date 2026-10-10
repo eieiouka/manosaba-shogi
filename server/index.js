@@ -3,11 +3,14 @@ import {pathToFileURL} from 'node:url';
 import {randomUUID, randomInt,createHash,timingSafeEqual} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createHistory} from './history.js';
+import {createProfiles} from './profiles.js';
 import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite} from '../src/game/rules.js';
 export const key = s => JSON.stringify([s.turn,s.board.map(r=>r.map(p=>p&&[p.type,p.side,p.promoted])),['sente','gote'].map(side=>s.hands[side].map(p=>p.type).sort())]);
-export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,adminPassword=process.env.ADMIN_PASSWORD||'',historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
+export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
  const sessions=new Map(),matches=new Map(),queue=[];
  const history=createHistory(historyPath);
+ const profiles=createProfiles(profilesPath);
+ const updateRanks=m=>{if(m.rankProcessed)return;m.rankProcessed=true;try{m.ratingChanges=profiles.settle(m)}catch(error){console.error('段位を保存できません:',error.message);m.rankError=true}};
  const adminEnabled=adminPassword.length>=16;
  const digest=value=>createHash('sha256').update(value).digest();
  const adminHash=digest(adminPassword);
@@ -15,9 +18,9 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
  const adminHtml=readFileSync(new URL('./admin.html',import.meta.url));
  const send=(p,event)=>{if(p.stream&&!p.stream.destroyed&&!p.stream.writableEnded)p.stream.write(`data: ${JSON.stringify({...event,serverNow:Date.now()})}\n\n`)};
  const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false};
- const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames});
+ const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames,profiles:Object.fromEntries(m.players.map((p,i)=>[i===0?'sente':'gote',profiles.view(p.profile)])),ratingChanges:m.ratingChanges,rankError:m.rankError});
  const broadcast=(m,extra={})=>m.players.forEach((p,i)=>send(p,{...snapshot(m),side:i===0?'sente':'gote',...extra}));
- const finish=(m,winner,reason)=>{if(m.result)return;m.result={winner,reason};m.deadline=null;m.readyAt=null;m.paused=false;broadcast(m);m.finishedAt=Date.now();history.end(m)};
+ const finish=(m,winner,reason)=>{if(m.result)return;m.result={winner,reason};m.deadline=null;m.readyAt=null;m.paused=false;updateRanks(m);broadcast(m);m.finishedAt=Date.now();history.end(m)};
  const settle=m=>{if(!m.result&&!m.paused&&Date.now()>=m.deadline)finish(m,opposite(m.state.turn),'timeout')};
  const pause=m=>{if(m.result||m.paused)return;settle(m);if(m.result)return;const now=Date.now();m.remaining=Math.max(0,m.deadline-Math.max(now,m.readyAt));m.delay=Math.max(0,m.readyAt-now);m.paused=true;m.deadline=null;broadcast(m)};
  const resume=m=>{if(m.result||!m.paused||m.players.some(p=>!p.stream))return;m.readyAt=Date.now()+m.delay;m.deadline=m.readyAt+m.remaining;m.paused=false;broadcast(m)};
@@ -59,21 +62,28 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
   const origin=req.headers.origin;
   if(origin&&!origins.includes(origin)){res.writeHead(403).end();return}
   if(origin)res.setHeader('Access-Control-Allow-Origin',origin);
-  res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
+  res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization, X-Player-Key');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
   if(req.method==='OPTIONS'){res.writeHead(204).end();return}
   const url=new URL(req.url,'http://localhost');
   const json=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data))};
   if(url.pathname==='/health'){json(200,{ok:true});return}
+  if(req.method==='POST'&&url.pathname==='/player'){
+   try{json(200,profiles.register())}catch{json(503,{error:'プロフィールを保存できません。再度お試しください'})}return;
+  }
+  if(req.method==='GET'&&url.pathname==='/profile'){
+   const player=profiles.get(req.headers['x-player-key']);
+   json(player?200:401,player?{profile:profiles.view(player)}:{error:'プロフィールを認証できません'});return;
+  }
   if(req.method==='POST'&&url.pathname==='/session'){
    if(sessions.size>=2000){json(503,{error:'混雑しています'});return}
-   const token=randomUUID();sessions.set(token,{token,stream:null,lastSeen:Date.now(),queued:false,match:null});json(200,{token});return;
+   const token=randomUUID();sessions.set(token,{token,profile:profiles.get(req.headers['x-player-key']),stream:null,lastSeen:Date.now(),queued:false,match:null});json(200,{token});return;
   }
   const token=req.method==='GET'?url.searchParams.get('token'):req.headers.authorization?.replace(/^Bearer /,'');
   const p=sessions.get(token);if(!p){json(401,{error:'接続し直してください'});return}p.lastSeen=Date.now();
   if(req.method==='GET'&&url.pathname==='/events'){
    p.stream?.end();p.stream=res;p.disconnectedAt=null;
    res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.write(': connected\n\n');
-   send(p,{type:'connected'});if(p.match){resume(p.match);send(p,{...snapshot(p.match),side:p.match.players[0]===p?'sente':'gote'})}
+   send(p,{type:'connected',profile:profiles.view(p.profile)});if(p.match){resume(p.match);send(p,{...snapshot(p.match),side:p.match.players[0]===p?'sente':'gote'})}
    res.on('close',()=>{if(p.stream!==res)return;p.stream=null;p.disconnectedAt=Date.now();removeQueue(p);if(p.match)pause(p.match)});return;
   }
   if(req.method!=='POST'){json(404,{error:'not found'});return}
@@ -84,7 +94,11 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
    if(p.match&&!p.match.result){json(409,{error:'対局中です'});return}
    const nickname=typeof body.nickname==='string'?body.nickname.trim():'';
    if(!nickname||Array.from(nickname).length>10||/[\u0000-\u001f\u007f]/.test(nickname)){json(400,{error:'ニックネームは1〜10文字で入力してください'});return}
-   p.nickname=nickname;
+   const profile=profiles.get(req.headers['x-player-key']);
+   if(req.headers['x-player-key']&&!profile){json(401,{error:'プロフィールを認証できません'});return}
+   if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
+   try{if(profile)profiles.name(profile,nickname)}catch{json(503,{error:'プロフィールを保存できません'});return}
+   p.profile=profile;p.nickname=nickname;
    p.match=null;if(!p.queued){p.queued=true;queue.push(p)}send(p,{type:'queued'});match();json(200,{ok:true});return;
   }
   if(url.pathname==='/cancel'){removeQueue(p);send(p,{type:'idle'});json(200,{ok:true});return}
@@ -102,7 +116,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
   history.move(m,side,action);
   m.state=applyLegalAction(m.state,action);m.revision++;m.result=terminalResult(m.state);
   const k=key(m.state),count=(m.seen.get(k)||0)+1;m.seen.set(k,count);if(!m.result&&count>=3)m.result={winner:null,reason:'repetition'};
-  m.readyAt=Date.now()+animationMs;m.deadline=m.result?null:m.readyAt+turnMs;if(m.result){m.finishedAt=Date.now();history.end(m)}broadcast(m,{action});json(200,{ok:true});
+  m.readyAt=Date.now()+animationMs;m.deadline=m.result?null:m.readyAt+turnMs;if(m.result){m.finishedAt=Date.now();updateRanks(m);history.end(m)}broadcast(m,{action});json(200,{ok:true});
  });
  const tick=setInterval(()=>{const now=Date.now();for(const m of matches.values()){
   if(m.result){if(now-m.finishedAt>300000){matches.delete(m.id);m.players.forEach(p=>{if(p.match===m)p.match=null})}continue}
