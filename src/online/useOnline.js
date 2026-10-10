@@ -75,7 +75,7 @@ export function useOnline(onMatch,onLobby){
     try{await openConnection(null)}catch{
      saveToken(null);ref.current.token=null;ref.current.events?.close();
      ref.current.connected=false;setConnected(false);
-     throw Error('再接続しても接続できませんでした。しばらくしてからお試しください');
+     throw Error('接続できませんでした。再試行すると接続できる場合があります。下のボタンからもう一度お試しください。');
     }
    }
   })();try{await ref.current.connecting}finally{ref.current.connecting=null}
