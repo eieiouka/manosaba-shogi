@@ -7,23 +7,61 @@ export function useOnline(onMatch,onLobby){
  const ref=useRef({}),callback=useRef(onMatch);callback.current=onMatch;
  useEffect(()=>{const t=setInterval(()=>setNow(Date.now()+(ref.current.offset||0)),50);return()=>{clearInterval(t);ref.current.events?.close()}},[]);
  const post=async(path,body={})=>{const r=await fetch(BASE+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${ref.current.token}`},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error||'通信に失敗しました');return data};
+ const readToken=()=>{try{return sessionStorage.getItem('manosaba-online-token')}catch{return null}};
+ const saveToken=token=>{try{if(token)sessionStorage.setItem('manosaba-online-token',token);else sessionStorage.removeItem('manosaba-online-token')}catch{}};
+ async function openConnection(token){
+  ref.current.events?.close();ref.current.connected=false;setConnected(false);
+  if(!token){
+   const controller=new AbortController();
+   const timer=setTimeout(()=>controller.abort(),15000);
+   try{
+    const response=await fetch(BASE+'/session',{method:'POST',signal:controller.signal});
+    if(!response.ok)throw Error('接続できません');
+    token=(await response.json()).token;
+    if(typeof token!=='string'||!token)throw Error('接続情報を取得できません');
+    saveToken(token);
+   }finally{clearTimeout(timer)}
+  }
+  ref.current.token=token;
+  await new Promise((resolve,reject)=>{
+   const events=new EventSource(BASE+'/events?token='+encodeURIComponent(token));ref.current.events=events;
+   let ready=false,failed=false;
+   const fail=error=>{
+    if(ready||failed)return;
+    failed=true;clearTimeout(timeout);events.close();
+    events.onmessage=null;events.onerror=null;
+    ref.current.connected=false;setConnected(false);reject(error);
+   };
+   const timeout=setTimeout(()=>fail(Error('接続がタイムアウトしました')),15000);
+   events.onmessage=e=>{
+    if(failed||ref.current.events!==events)return;
+    let data;try{data=JSON.parse(e.data)}catch{fail(Error('接続情報を読み込めません'));return}
+    ref.current.offset=data.serverNow-Date.now();
+    if(data.type==='connected'){ready=true;clearTimeout(timeout);ref.current.connected=true;setConnected(true);setError('');resolve()}
+    if(data.type==='queued')setStatus('queued');if(data.type==='idle')setStatus('idle');
+    if(data.type==='match'){setStatus('match');setMatch(data);setError('');callback.current(data)}
+   };
+   events.onerror=()=>{
+    if(failed||ref.current.events!==events)return;
+    if(!ready){fail(Error('接続できません'));return}
+    ref.current.connected=false;setConnected(false);setError('再接続しています…');
+   };
+  });
+ }
  async function connect(){
   if(ref.current.events&&ref.current.connected)return;
   if(ref.current.connecting)return ref.current.connecting;
   ref.current.connecting=(async()=>{
-   let token=sessionStorage.getItem('manosaba-online-token');
-   if(!token){const r=await fetch(BASE+'/session',{method:'POST'});if(!r.ok)throw Error('接続できません');token=(await r.json()).token;sessionStorage.setItem('manosaba-online-token',token)}
-   ref.current.token=token;ref.current.events?.close();
-   await new Promise((resolve,reject)=>{
-    const events=new EventSource(BASE+'/events?token='+encodeURIComponent(token));ref.current.events=events;
-    const timeout=setTimeout(()=>{events.close();sessionStorage.removeItem('manosaba-online-token');reject(Error('接続できません。再度お試しください'))},15000);
-    events.onmessage=e=>{const data=JSON.parse(e.data);ref.current.offset=data.serverNow-Date.now();
-     if(data.type==='connected'){clearTimeout(timeout);ref.current.connected=true;setConnected(true);setError('');resolve()}
-     if(data.type==='queued')setStatus('queued');if(data.type==='idle')setStatus('idle');
-     if(data.type==='match'){setStatus('match');setMatch(data);setError('');callback.current(data)}
-    };
-    events.onerror=()=>{ref.current.connected=false;setConnected(false);setError('再接続しています…')};
-   });
+   try{await openConnection(readToken())}
+   catch{
+    // Retry initial connection once, obtaining a fresh session after a restart.
+    saveToken(null);ref.current.token=null;ref.current.events?.close();
+    try{await openConnection(null)}catch{
+     saveToken(null);ref.current.token=null;ref.current.events?.close();
+     ref.current.connected=false;setConnected(false);
+     throw Error('再接続しても接続できませんでした。しばらくしてからお試しください');
+    }
+   }
   })();try{await ref.current.connecting}finally{ref.current.connecting=null}
  }
  const validName=name=>Boolean(name)&&Array.from(name).length<=10&&!/[\u0000-\u001f\u007f]/.test(name);
