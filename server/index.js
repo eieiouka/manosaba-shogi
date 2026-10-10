@@ -22,6 +22,16 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
  const adminFailures=new Map();
  const adminHtml=readFileSync(new URL('./admin.html',import.meta.url));
  const send=(p,event)=>{if(p.stream&&!p.stream.destroyed&&!p.stream.writableEnded)p.stream.write(`data: ${JSON.stringify({...event,serverNow:Date.now()})}\n\n`)};
+ const connected=p=>Boolean(p.stream&&!p.stream.destroyed&&!p.stream.writableEnded);
+ const presence=()=>{
+  const ongoing=[...matches.values()].filter(m=>!m.result&&!m.paused&&m.players.every(connected));
+  const maxMoves=ongoing.length?Math.max(...ongoing.map(m=>m.revision)):null;
+  for(const p of sessions.values())if(connected(p)){
+   p.waitEstimateSeed??=randomInt(55,66);
+   const seconds=maxMoves===null?p.waitEstimateSeed:maxMoves===0?60:Math.max(10,maxMoves*2);
+   if(p.waitEstimateSeconds!==seconds){p.waitEstimateSeconds=seconds;send(p,{type:'wait-estimate',seconds})}
+  }
+ };
  const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false};
  const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames,profiles:Object.fromEntries(m.players.map((p,i)=>[i===0?'sente':'gote',profiles.view(p.profile)])),ratingChanges:m.ratingChanges,rankError:m.rankError});
  const broadcast=(m,extra={})=>m.players.forEach((p,i)=>send(p,{...snapshot(m),side:i===0?'sente':'gote',...extra}));
@@ -97,7 +107,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
   if(req.method==='GET'&&url.pathname==='/events'){
    p.stream?.end();p.stream=res;p.disconnectedAt=null;
    res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','X-Accel-Buffering':'no'});res.write(': connected\n\n');
-   send(p,{type:'connected',profile:profiles.view(p.profile)});if(p.match){resume(p.match);send(p,{...snapshot(p.match),side:p.match.players[0]===p?'sente':'gote'})}
+   send(p,{type:'connected',profile:profiles.view(p.profile)});p.waitEstimateSeconds=undefined;presence();if(p.match){resume(p.match);send(p,{...snapshot(p.match),side:p.match.players[0]===p?'sente':'gote'})}
    res.on('close',()=>{if(p.stream!==res)return;p.stream=null;p.disconnectedAt=Date.now();removeQueue(p);if(p.match)pause(p.match)});return;
   }
   if(req.method!=='POST'){json(404,{error:'not found'});return}
@@ -114,7 +124,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
    if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
    try{profiles.name(profile,nickname)}catch(e){json(e.code==='nickname-taken'?409:503,{error:e.code==='nickname-taken'?e.message:'プロフィールを保存できません',code:e.code});return}
    p.profile=profile;p.nickname=nickname;
-   p.match=null;if(!p.queued){p.queued=true;queue.push(p)}send(p,{type:'queued'});match();json(200,{ok:true});return;
+   p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(55,66);p.waitEstimateSeconds=undefined;queue.push(p)}send(p,{type:'queued'});match();json(200,{ok:true});return;
   }
   if(url.pathname==='/cancel'){removeQueue(p);send(p,{type:'idle'});json(200,{ok:true});return}
   const m=p.match;if(!m||body.id!==m.id){json(409,{error:'対局がありません'});return}settle(m);
@@ -138,11 +148,12 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
   const disconnected=m.players.filter(p=>p.disconnectedAt&&now-p.disconnectedAt>=graceMs);
   if(disconnected.length===2)finish(m,null,'disconnected');else if(disconnected.length===1)finish(m,disconnected[0]===m.players[0]?'gote':'sente','disconnected');else settle(m);
  }for(const [token,p]of sessions){if(!p.stream&&(!p.match||p.match.result)&&now-p.lastSeen>300000){removeQueue(p);sessions.delete(token)}}},50);
+ const presenceTimer=setInterval(presence,1000);
  const heartbeat=setInterval(()=>sessions.forEach(p=>send(p,{type:'heartbeat'})),10000);
- server.on('close',()=>{clearInterval(tick);clearInterval(heartbeat);sessions.forEach(p=>p.stream?.end())});
+ server.on('close',()=>{clearInterval(tick);clearInterval(heartbeat);clearInterval(presenceTimer);sessions.forEach(p=>p.stream?.end())});
  return server;
 }
 if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  const origins=(process.env.ALLOWED_ORIGINS||'http://localhost:5173').split(',').map(s=>s.trim());
- createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening [rank-profile-required-v2]'));
+ createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening [wait-estimate-v4]'));
 }

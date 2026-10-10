@@ -390,11 +390,12 @@ function OnlineLobby({online,background=false,onCpu}){
  const [expanded,setExpanded]=useState(false);
  const [draft,setDraft]=useState("");
  const naming=online.status==="naming";
+ const estimateText=online.waitEstimateSeconds===null?"確認中":`${online.waitEstimateSeconds}秒`;
  const waiting=online.status==="queued"||online.status==="connecting";
  useEffect(()=>{if(naming)setDraft(Array.from(online.nickname||"").slice(0,10).join(""))},[naming,online.nickname]);
  if(!naming&&!waiting&&(!online.error||online.status==="match"))return null;
  if(background&&!naming)return <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",fontSize:12}}>
-  <button type="button" aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)} style={{padding:"4px 8px",fontSize:12,borderRadius:6}}>{online.status==="queued"?"待機中":online.status==="connecting"?"接続中":"通信エラー"}</button>
+  <button type="button" aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)} style={{padding:"4px 8px",fontSize:12,borderRadius:6}}>{online.status==="queued"?`待機（推定${estimateText}）`:online.status==="connecting"?"接続中":"通信エラー"}</button>
   {expanded&&<>
    {online.error&&<span role="status">{online.error}</span>}
    {online.status!=="connecting"&&<button type="button" onClick={online.cancel} style={{padding:"4px 8px",fontSize:12}}>{waiting?"待機をやめる":"閉じる"}</button>}
@@ -411,11 +412,11 @@ function OnlineLobby({online,background=false,onCpu}){
     <button type="submit" disabled={!draft.trim()}>対戦相手を探す</button>
     <button type="button" onClick={online.cancel}>戻る</button>
    </form>:<>
-    <p role="status">{waiting?(online.status==="connecting"?"サーバーに接続しています…":"対戦相手を探しています…"):online.error}</p>
+    <p role="status">{waiting?(online.status==="connecting"?"サーバーに接続しています…":`待機（推定${estimateText}）`):online.error}</p>
     {!waiting&&<button onClick={online.editNickname}>再試行</button>}
     {online.status==="queued"&&<>
      <button type="button" onClick={onCpu}>待ちながらCPUと対戦</button>
-     <p>相手が見つかるとCPU戦を終了し、オンライン戦に切り替わります。</p>
+     <p>表示時間は目安です。相手が見つかるとCPU戦を終了し、オンライン戦に切り替わります。</p>
     </>}
     {waiting&&<button onClick={online.cancel} disabled={online.status==="connecting"}>キャンセル</button>}
    </>}

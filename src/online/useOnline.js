@@ -4,6 +4,7 @@ export function useOnline(onMatch,onLobby){
  const [nickname,setNickname]=useState(()=>{try{return localStorage.getItem('manosaba-nickname')||''}catch{return ''}});
  const [connected,setConnected]=useState(false);
  const [profile,setProfile]=useState(null);
+ const [waitEstimateSeconds,setWaitEstimateSeconds]=useState(null);
  const [status,setStatus]=useState('idle'),[error,setError]=useState(''),[match,setMatch]=useState(null),[now,setNow]=useState(Date.now());
  const ref=useRef({}),callback=useRef(onMatch);callback.current=onMatch;
  useEffect(()=>{const t=setInterval(()=>setNow(Date.now()+(ref.current.offset||0)),50);return()=>{clearInterval(t);ref.current.events?.close()}},[]);
@@ -26,7 +27,7 @@ export function useOnline(onMatch,onLobby){
  const readToken=()=>{try{return sessionStorage.getItem('manosaba-online-token')}catch{return null}};
  const saveToken=token=>{try{if(token)sessionStorage.setItem('manosaba-online-token',token);else sessionStorage.removeItem('manosaba-online-token')}catch{}};
  async function openConnection(token){
-  ref.current.events?.close();ref.current.connected=false;setConnected(false);
+  ref.current.events?.close();ref.current.connected=false;setConnected(false);setWaitEstimateSeconds(null);
   if(!token){
    const controller=new AbortController();
    const timer=setTimeout(()=>controller.abort(),15000);
@@ -46,7 +47,7 @@ export function useOnline(onMatch,onLobby){
     if(ready||failed)return;
     failed=true;clearTimeout(timeout);events.close();
     events.onmessage=null;events.onerror=null;
-    ref.current.connected=false;setConnected(false);reject(error);
+    ref.current.connected=false;setConnected(false);setWaitEstimateSeconds(null);reject(error);
    };
    const timeout=setTimeout(()=>fail(Error('接続がタイムアウトしました')),15000);
    events.onmessage=e=>{
@@ -54,13 +55,14 @@ export function useOnline(onMatch,onLobby){
     let data;try{data=JSON.parse(e.data)}catch{fail(Error('接続情報を読み込めません'));return}
     ref.current.offset=data.serverNow-Date.now();
     if(data.type==='connected'){if(data.profile)setProfile(data.profile);ready=true;clearTimeout(timeout);ref.current.connected=true;setConnected(true);setError('');resolve()}
+    if(data.type==='wait-estimate'&&Number.isInteger(data.seconds)&&data.seconds>=0)setWaitEstimateSeconds(data.seconds);
     if(data.type==='queued')setStatus('queued');if(data.type==='idle')setStatus('idle');
     if(data.type==='match'){if(data.profiles?.[data.side])setProfile(data.profiles[data.side]);setStatus('match');setMatch(data);setError('');callback.current(data)}
    };
    events.onerror=()=>{
     if(failed||ref.current.events!==events)return;
     if(!ready){fail(Error('接続できません'));return}
-    ref.current.connected=false;setConnected(false);setError('再接続しています…');
+    ref.current.connected=false;setConnected(false);setWaitEstimateSeconds(null);setError('再接続しています…');
    };
   });
  }
@@ -74,7 +76,7 @@ export function useOnline(onMatch,onLobby){
     saveToken(null);ref.current.token=null;ref.current.events?.close();
     try{await openConnection(null)}catch{
      saveToken(null);ref.current.token=null;ref.current.events?.close();
-     ref.current.connected=false;setConnected(false);
+     ref.current.connected=false;setConnected(false);setWaitEstimateSeconds(null);
      throw Error('接続できませんでした。再試行すると接続できる場合があります。下のボタンからもう一度お試しください。');
     }
    }
@@ -101,5 +103,5 @@ export function useOnline(onMatch,onLobby){
  async function move(action){try{await post('/move',{id:match.id,revision:match.revision,action});setError('')}catch(e){setError(e.message)}}
  async function resign(){try{await post('/resign',{id:match.id})}catch(e){setError(e.message)}}
  async function resetNickname(){await loadProfile();await saveName('');try{localStorage.removeItem('manosaba-nickname')}catch{throw Error('端末の名前をリセットできませんでした')}setNickname('');return true}
- return {profile,loadProfile,resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,editNickname,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
+ return {waitEstimateSeconds,profile,loadProfile,resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,editNickname,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
 }
