@@ -1,6 +1,7 @@
 import {useEffect,useRef,useState} from 'react';
 import './nickname-reset.css';
 import './profile.css';
+import RankLabel from './RankLabel.jsx';
 export default function NicknameReset({nickname='',profile,onLoad,onReset}){
  const [open,setOpen]=useState(false),[confirming,setConfirming]=useState(false),[error,setError]=useState(''),[loading,setLoading]=useState(false);
  const trigger=useRef(null),dialog=useRef(null),loadSequence=useRef(0);
@@ -36,7 +37,7 @@ export default function NicknameReset({nickname='',profile,onLoad,onReset}){
     </>:<>
      <header className="player-profile-heading"><h2 id="player-profile-title">プロフィール</h2><div><button type="button" className="player-profile-reset" onClick={()=>{setError('');setConfirming(true)}}>名前をリセット</button><button type="button" onClick={close} aria-label="閉じる">×</button></div></header>
      <div className="player-profile-name">{nickname}</div>
-     <div className="player-profile-rank">{profile?.rank||'—'}</div>
+     <div className="player-profile-rank"><RankLabel rank={profile?.rank||'—'}/></div>
      {loading&&<p role="status">読み込んでいます…</p>}
      {error&&<p role="alert" className="player-profile-error">{error} <button type="button" disabled={loading} onClick={refresh}>再読み込み</button></p>}
      {profile&&<>

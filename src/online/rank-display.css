@@ -1,0 +1,4 @@
+.rank-label{white-space:nowrap;font-family:"Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;font-weight:900}
+.rank-label .rank-number{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-variant-numeric:lining-nums tabular-nums;letter-spacing:-.045em;font-size:1.15em;line-height:1;text-shadow:0 1px 2px #0005,0 0 .18em #edc48233}
+.online-bar__opponent{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px}
+.opponent-rank-badge{display:inline-flex;align-items:center;padding:.25em .65em;border:1px solid #caa165;border-radius:7px;background:linear-gradient(135deg,#382b1b,#201c18);color:#ffe1a0;font-size:.9em;line-height:1.35;box-shadow:inset 0 1px 0 #fff1}

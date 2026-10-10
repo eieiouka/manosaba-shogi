@@ -3,6 +3,7 @@ import "./App.css";
 import "./online/online.css";
 import {useOnline} from "./online/useOnline.js";
 import NicknameReset from "./online/NicknameReset.jsx";
+import RankLabel from "./online/RankLabel.jsx";
 import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,applyLegalAction,terminalResult,isEmmaInCheck} from "./game/rules.js";
 import {stateKey} from "./game/aiEngine.js";
 
@@ -369,7 +370,7 @@ export default function App(){
    <div className="match-actions"><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></div>
   </header>
   {mode==="online"&&<div className="online-bar" role="status">
-   <div className="online-bar__opponent">VS {online.match?.nicknames?.[opponentSide]||"相手"} {online.match?.profiles?.[opponentSide]?.rank||""}</div>
+   <div className="online-bar__opponent"><span>VS {online.match?.nicknames?.[opponentSide]||"相手"}</span>{online.match?.profiles?.[opponentSide]?.rank&&<span className="opponent-rank-badge" aria-label={`相手の段位 ${online.match.profiles[opponentSide].rank}`}><RankLabel rank={online.match.profiles[opponentSide].rank}/></span>}</div>
    <div className="online-bar__clock">{online.match?.result?"対局終了":online.match?.paused?"再接続待ち":online.now<online.match?.readyAt?"準備中…":state.turn===humanSide?`残り${online.remaining}秒`:"\u00a0"}</div>
    {online.error&&<span>{online.error}</span>}
   </div>}
