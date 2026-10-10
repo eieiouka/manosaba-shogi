@@ -79,6 +79,15 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
    const player=profiles.get(req.headers['x-player-key']);
    json(player?200:401,player?{profile:profiles.view(player)}:{error:'プロフィールを認証できません'});return;
   }
+  if(req.method==='POST'&&url.pathname==='/profile/name'){
+   const player=profiles.get(req.headers['x-player-key']);if(!player){json(401,{error:'プロフィールを認証できません'});return}
+   if([...sessions.values()].some(s=>s.profile?.id===player.id&&(s.queued||s.match&&!s.match.result))){json(409,{error:'待機・対局が終わってから名前を変更してください'});return}
+   let raw='';try{for await(const chunk of req){raw+=chunk;if(raw.length>8192){json(413,{error:'too large'});return}}const body=JSON.parse(raw||'{}');
+    if(typeof body.nickname!=='string'){json(400,{error:'名前が不正です'});return}const name=body.nickname.trim();
+    if(Array.from(name).length>10||/[\u0000-\u001f\u007f]/.test(name)){json(400,{error:'ニックネームは1〜10文字で入力してください'});return}
+    try{profiles.name(player,name);json(200,{profile:profiles.view(player)})}catch(e){json(e.code==='nickname-taken'?409:503,{error:e.code==='nickname-taken'?e.message:'名前を保存できません',code:e.code})}
+   }catch{json(400,{error:'invalid JSON'})}return;
+  }
   if(req.method==='POST'&&url.pathname==='/session'){
    if(sessions.size>=2000){json(503,{error:'混雑しています'});return}
    const token=randomUUID();sessions.set(token,{token,profile:profiles.get(req.headers['x-player-key']),stream:null,lastSeen:Date.now(),queued:false,match:null});json(200,{token});return;
@@ -103,7 +112,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
    if(!profile){json(426,{error:'ゲーム画面を再読み込みしてください。戦績を保存するためのプロフィール登録が必要です'});return}
    if(req.headers['x-player-key']&&!profile){json(401,{error:'プロフィールを認証できません'});return}
    if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
-   try{if(profile)profiles.name(profile,nickname)}catch{json(503,{error:'プロフィールを保存できません'});return}
+   try{profiles.name(profile,nickname)}catch(e){json(e.code==='nickname-taken'?409:503,{error:e.code==='nickname-taken'?e.message:'プロフィールを保存できません',code:e.code});return}
    p.profile=profile;p.nickname=nickname;
    p.match=null;if(!p.queued){p.queued=true;queue.push(p)}send(p,{type:'queued'});match();json(200,{ok:true});return;
   }

@@ -21,6 +21,7 @@ export function useOnline(onMatch,onLobby){
    }finally{clearTimeout(timer)}
   })();try{return await ref.current.profileLoading}finally{ref.current.profileLoading=null}
  }
+ async function saveName(name){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);try{const r=await fetch(BASE+'/profile/name',{method:'POST',headers:{...playerHeaders(),'Content-Type':'application/json'},body:JSON.stringify({nickname:name}),signal:controller.signal});const data=await r.json();if(!r.ok){const e=Error(data.error||'名前を保存できません');e.code=data.code;throw e}setProfile(data.profile);return data.profile}finally{clearTimeout(timer)}}
  const post=async(path,body={})=>{const r=await fetch(BASE+path,{method:'POST',headers:{...playerHeaders(),'Content-Type':'application/json',Authorization:`Bearer ${ref.current.token}`},body:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.error||'通信に失敗しました');return data};
  const readToken=()=>{try{return sessionStorage.getItem('manosaba-online-token')}catch{return null}};
  const saveToken=token=>{try{if(token)sessionStorage.setItem('manosaba-online-token',token);else sessionStorage.removeItem('manosaba-online-token')}catch{}};
@@ -80,7 +81,7 @@ export function useOnline(onMatch,onLobby){
   })();try{await ref.current.connecting}finally{ref.current.connecting=null}
  }
  const validName=name=>Boolean(name)&&Array.from(name).length<=10&&!/[\u0000-\u001f\u007f]/.test(name);
- async function beginQueue(name){setError('');setStatus('connecting');try{await loadProfile();await connect();await post('/queue',{nickname:name})}catch(e){setError(e.message);setStatus('idle')}}
+ async function beginQueue(name){setError('');setStatus('connecting');try{await loadProfile();await saveName(name);setNickname(name);try{localStorage.setItem('manosaba-nickname',name)}catch{}await connect();await post('/queue',{nickname:name})}catch(e){setError(e.message);setStatus(e.code==='nickname-taken'?'naming':'idle')}}
  function queue(){
   onLobby?.();setError('');
   const name=nickname.trim();
@@ -90,7 +91,6 @@ export function useOnline(onMatch,onLobby){
  function submitNickname(entered){
   const name=entered.trim();
   if(!validName(name)){setError('ニックネームを1〜10文字で入力してください');return}
-  setNickname(name);try{localStorage.setItem('manosaba-nickname',name)}catch{}
   return beginQueue(name);
  }
  async function cancel(){
@@ -99,6 +99,6 @@ export function useOnline(onMatch,onLobby){
  }
  async function move(action){try{await post('/move',{id:match.id,revision:match.revision,action});setError('')}catch(e){setError(e.message)}}
  async function resign(){try{await post('/resign',{id:match.id})}catch(e){setError(e.message)}}
- function resetNickname(){try{localStorage.removeItem('manosaba-nickname')}catch{return false}setNickname('');return true}
+ async function resetNickname(){await loadProfile();await saveName('');try{localStorage.removeItem('manosaba-nickname')}catch{throw Error('端末の名前をリセットできませんでした')}setNickname('');return true}
  return {profile,loadProfile,resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
 }

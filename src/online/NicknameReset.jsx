@@ -30,7 +30,7 @@ export default function NicknameReset({nickname='',profile,onLoad,onReset}){
      <p id="nickname-reset-note">※この操作は戻せません</p>
      {error&&<p role="alert" className="player-profile-error">{error}</p>}
      <div className="nickname-reset-actions">
-      <button type="button" className="nickname-reset-yes" onClick={()=>{if(onReset()===false){setError('名前をリセットできませんでした');return}close()}}>はい</button>
+      <button type="button" className="nickname-reset-yes" disabled={loading} onClick={async()=>{setError('');setLoading(true);try{if(await onReset()===false){setError('名前をリセットできませんでした');return}close()}catch(e){setError(e.message||'名前をリセットできませんでした')}finally{setLoading(false)}}}>はい</button>
       <button data-cancel type="button" onClick={()=>{setError('');setConfirming(false)}}>キャンセル</button>
      </div>
     </>:<>
