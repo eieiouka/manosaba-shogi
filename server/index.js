@@ -10,7 +10,12 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
  const sessions=new Map(),matches=new Map(),queue=[];
  const history=createHistory(historyPath);
  const profiles=createProfiles(profilesPath);
- const updateRanks=m=>{if(m.rankProcessed)return;m.rankProcessed=true;try{m.ratingChanges=profiles.settle(m)}catch(error){console.error('段位を保存できません:',error.message);m.rankError=true}};
+ const updateRanks=m=>{if(m.rankProcessed)return;m.rankProcessed=true;try{
+  if(m.players.some(p=>!p.profile))throw Error('対局者のプロフィールが未登録です');
+  if(m.players[0].profile.id===m.players[1].profile.id)throw Error('同じプロフィール同士の対局です');
+  m.ratingChanges=profiles.settle(m);
+  console.log('[戦績加算]',m.id,m.ratingChanges?'保存完了':'加算済み',m.result.reason);
+ }catch(error){console.error('[戦績加算失敗]',m.id,error.message);m.rankError=true}};
  const adminEnabled=adminPassword.length>=16;
  const digest=value=>createHash('sha256').update(value).digest();
  const adminHash=digest(adminPassword);
@@ -94,7 +99,8 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
    if(p.match&&!p.match.result){json(409,{error:'対局中です'});return}
    const nickname=typeof body.nickname==='string'?body.nickname.trim():'';
    if(!nickname||Array.from(nickname).length>10||/[\u0000-\u001f\u007f]/.test(nickname)){json(400,{error:'ニックネームは1〜10文字で入力してください'});return}
-   const profile=profiles.get(req.headers['x-player-key']);
+   const profile=req.headers['x-player-key']?profiles.get(req.headers['x-player-key']):p.profile;
+   if(!profile){json(426,{error:'ゲーム画面を再読み込みしてください。戦績を保存するためのプロフィール登録が必要です'});return}
    if(req.headers['x-player-key']&&!profile){json(401,{error:'プロフィールを認証できません'});return}
    if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
    try{if(profile)profiles.name(profile,nickname)}catch{json(503,{error:'プロフィールを保存できません'});return}
@@ -129,5 +135,5 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
 }
 if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  const origins=(process.env.ALLOWED_ORIGINS||'http://localhost:5173').split(',').map(s=>s.trim());
- createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening'));
+ createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening [rank-profile-required-v2]'));
 }
