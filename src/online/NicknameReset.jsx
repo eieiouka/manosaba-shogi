@@ -22,7 +22,7 @@ export default function NicknameReset({nickname='',profile,onLoad,onReset}){
  const games=profile?.games||0,rate=games?Math.round(profile.wins/games*100):0;
  const needed=profile?Math.max(0,profile.nextRating-profile.rating):50;
  return <>
-  <button ref={trigger} type="button" className="nickname-reset-button" disabled={!enabled} style={!enabled?{opacity:.35,cursor:'default'}:undefined} onClick={()=>{setOpen(true);setConfirming(false);refresh()}}>プロフィール</button>
+  <button ref={trigger} type="button" className="nickname-reset-button" disabled={!enabled} style={!enabled?{opacity:.35,cursor:'default'}:undefined} onClick={()=>{setOpen(true);setConfirming(false);refresh()}}>Your profile</button>
   {open&&<div className="player-profile-overlay" onClick={event=>{if(event.target===event.currentTarget)close()}}>
    <section ref={dialog} className="player-profile-dialog" role="dialog" aria-modal="true" aria-labelledby="player-profile-title">
     {confirming?<>

@@ -40,3 +40,11 @@ button.nickname-reset-button {
   padding: clamp(4px, 2vw, 16px) clamp(6px, 4vw, 32px) !important;
   border-radius: clamp(4px, 1.5vw, 14px) !important;
 }
+
+button.nickname-reset-button {
+  font-size: min(24px, 1.875vw) !important;
+  padding: min(16px, 1.25vw) min(32px, 2.5vw) !important;
+  border-radius: min(14px, 1.094vw) !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
