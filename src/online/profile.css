@@ -34,3 +34,9 @@ button.nickname-reset-button {
   max-width: calc(100vw - 32px);
   font-weight: 700;
 }
+
+button.nickname-reset-button {
+  font-size: clamp(8px, 3vw, 24px) !important;
+  padding: clamp(4px, 2vw, 16px) clamp(6px, 4vw, 32px) !important;
+  border-radius: clamp(4px, 1.5vw, 14px) !important;
+}
