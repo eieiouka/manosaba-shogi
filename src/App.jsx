@@ -368,7 +368,7 @@ export default function App(){
 
  return <div className="app-shell">
   <header className="topbar">
-   <div className="branding"><div className="eyebrow">MANOSABA SHOGI AI</div><h1>魔法少女ノ魔法将棋</h1></div>
+   <div className="branding"><div className="eyebrow">MANOSABA SHOGI</div><h1>魔法少女ノ魔法将棋</h1></div>
    <div className="match-actions"><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></div>
   </header>
   {mode==="online"&&<div className="online-bar" role="status">
