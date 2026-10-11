@@ -13,28 +13,52 @@ function action(a){return (a.category==='drop'?(pieces[a.piece?.type]||a.piece?.
 async function api(path){const r=await fetch(path,{headers:{Authorization:'Bearer '+password},cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.error||'取得できません');return d}
 function cell(tr,value){const td=document.createElement('td');td.textContent=value;tr.append(td);return td}
 async function detail(id){try{const r=await api('/admin/match?id='+encodeURIComponent(id));$('detailMeta').textContent=date(r.startedAt)+'\n先手：'+r.nicknames.sente+' / 後手：'+r.nicknames.gote+'\n'+result(r)+'\n終了：'+date(r.finishedAt);$('moves').replaceChildren();r.moves.forEach((m,i)=>{const tr=document.createElement('tr');cell(tr,i+1);cell(tr,r.nicknames[m.side]);cell(tr,action(m.action));cell(tr,date(m.at));$('moves').append(tr)});$('details').showModal()}catch(e){$('error').textContent=e.message}}
-let notifyOn=false,audio=null,alertEpoch=null,lastAlert=0,watchId='';
+let notifyOn=false,audio=null,desktopNotice=null,alertEpoch=null,lastAlert=0,watchId='';
 try{watchId=localStorage.getItem('manosaba-admin-watch')||''}catch{}
-function stopAlerts(){notifyOn=false;$('toggleAlert').textContent='待機通知OFF';$('toggleAlert').setAttribute('aria-pressed','false');$('waitingNotice').textContent=''}
+function stopAlerts(){stopAlarm();desktopNotice?.close();desktopNotice=null;notifyOn=false;$('toggleAlert').textContent='待機通知OFF';$('toggleAlert').setAttribute('aria-pressed','false');$('waitingNotice').textContent=''}
 $('linkGame').onclick=()=>{watchId=crypto.randomUUID();try{localStorage.setItem('manosaba-admin-watch',watchId)}catch{}stopAlerts();alertEpoch=null;window.open('https://manosaba-shogi.vercel.app/?adminNotifyId='+encodeURIComponent(watchId),'manosaba-admin-game');load()};
 $('toggleAlert').onclick=async()=>{
  if(!watchId){$('alertState').textContent='先にゲーム画面を開いて連携してください';return}
  if(notifyOn){stopAlerts();return}
+ if(!('Notification' in window)){$('alertState').textContent='このブラウザではデスクトップ通知を利用できません';return}
+ let permission=Notification.permission;
+ if(permission==='default'){try{permission=await Notification.requestPermission()}catch{permission='denied'}}
+ if(permission!=='granted'){$('alertState').textContent='ブラウザのサイト設定で通知を許可してください';return}
  try{audio??=new (window.AudioContext||window.webkitAudioContext)();await audio.resume()}catch{}
  notifyOn=true;alertEpoch=null;$('toggleAlert').textContent='待機通知ON';$('toggleAlert').setAttribute('aria-pressed','true');load();
 };
-function checkWaiting(data){
- if(!data)return;
- const baseline=alertEpoch!==data.epoch;
- const events=baseline?[]:data.events.filter(e=>e.sequence>lastAlert&&!e.busyWatch?.includes(watchId));
- alertEpoch=data.epoch;lastAlert=data.sequence;
- const known=data.activity.known,busy=data.activity.busy;
- $('alertState').textContent=!notifyOn?'通知OFF':!known?'連携確認待ち・通知停止中':busy?'あなたが対局中・通知停止中':'待機開始を通知します';
- if(!notifyOn||!known||busy||!events.length){if(busy||!notifyOn||!known)$('waitingNotice').textContent='';return}
- $('waitingNotice').textContent=events.map(e=>e.nickname+'さんが待機に入りました').join(' / ');
- if(audio?.state==='running'){const oscillator=audio.createOscillator(),gain=audio.createGain();oscillator.connect(gain);gain.connect(audio.destination);oscillator.frequency.value=880;gain.gain.setValueAtTime(.08,audio.currentTime);gain.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.25);oscillator.start();oscillator.stop(audio.currentTime+.25)}
+let alarmId=null,alarmTimer=null;const alarmNotes=new Set();
+function stopAlarm(){
+ clearInterval(alarmTimer);alarmTimer=null;alarmId=null;
+ for(const note of alarmNotes){try{note.stop()}catch{}}alarmNotes.clear();
+ desktopNotice?.close();desktopNotice=null;$('waitingNotice').textContent='';
 }
-async function load(){if(loading||!password)return;loading=true;const currentPassword=password;try{$('error').textContent='';const d=await api('/admin/matches?watch='+encodeURIComponent(watchId)+'&offset='+offset+'&q='+encodeURIComponent($('query').value));if(password!==currentPassword)return;checkWaiting(d.waitingAlert);total=d.total;$('dashboard').hidden=false;$('login').hidden=true;$('logout').hidden=false;$('cards').replaceChildren();for(const [label,n]of [['累計対局',d.summary.total],['今日の対局',d.summary.today],['終了した対局',d.summary.completed],['現在の対局',d.summary.active],['待機人数',d.summary.waiting],['CPU対局中',d.summary.cpuActive??0]]){const el=document.createElement('div');el.className='card';el.textContent=label;const value=document.createElement('strong');value.textContent=n;el.append(value);$('cards').append(el)}if(d.summary.storageError)$('error').textContent='履歴の保存に失敗しています。サーバーの保存先を確認してください。';$('rows').replaceChildren();for(const r of d.items){const tr=document.createElement('tr');cell(tr,date(r.startedAt));cell(tr,r.nicknames.sente);cell(tr,r.nicknames.gote);cell(tr,result(r));cell(tr,r.moveCount);cell(tr,r.finishedAt?Math.round((r.finishedAt-r.startedAt)/1000)+'秒':'—');const td=cell(tr,'');const b=document.createElement('button');b.textContent='詳細';b.onclick=()=>detail(r.id);td.append(b);$('rows').append(tr)}$('page').textContent=total?`${offset+1}–${Math.min(offset+50,total)} / ${total}件`:'履歴はまだありません';$('prev').disabled=offset===0;$('next').disabled=offset+50>=total}catch(e){if(password===currentPassword)$('error').textContent=e.message}finally{loading=false}}
+function beepTriplet(){
+ if(!notifyOn||!alarmId||audio?.state!=='running')return;
+ for(let i=0;i<3;i++){
+  const note=audio.createOscillator(),gain=audio.createGain(),at=audio.currentTime+i*.35;
+  note.connect(gain);gain.connect(audio.destination);note.frequency.value=880;
+  gain.gain.setValueAtTime(.08,at);gain.gain.exponentialRampToValueAtTime(.001,at+.16);
+  alarmNotes.add(note);note.onended=()=>{alarmNotes.delete(note);note.disconnect();gain.disconnect()};
+  note.start(at);note.stop(at+.18);
+ }
+}
+function checkWaiting(data){
+ if(!data){stopAlarm();return}
+ const known=data.activity.known,busy=data.activity.busy,lone=data.lonely;
+ $('alertState').textContent=!notifyOn?'通知OFF':!known?'連携確認待ち・通知停止中':busy?'あなたが対局中・通知停止中':lone&&!lone.eligible?'1人だけの待機が1分続くか確認中':'対人戦0局・1人待機が1分続いたら通知します';
+ if(!notifyOn||!known||busy||!lone?.eligible){stopAlarm();return}
+ const key=data.epoch+':'+lone.id;
+ if(alarmId===key)return;
+ stopAlarm();alarmId=key;
+ $('waitingNotice').textContent=lone.nickname+'さんが1人で1分以上待っています';
+ if(Notification.permission==='granted')try{
+  desktopNotice=new Notification('まのさば将棋：対戦相手が待っています',{body:$('waitingNotice').textContent,tag:'manosaba-waiting',requireInteraction:true});
+  desktopNotice.onclick=()=>{desktopNotice?.close();window.open('https://manosaba-shogi.vercel.app/','manosaba-admin-game')};
+ }catch{}
+ beepTriplet();alarmTimer=setInterval(beepTriplet,3000);
+}
+async function load(){if(loading||!password)return;loading=true;const currentPassword=password;try{$('error').textContent='';const d=await api('/admin/matches?watch='+encodeURIComponent(watchId)+'&offset='+offset+'&q='+encodeURIComponent($('query').value));if(password!==currentPassword)return;checkWaiting(d.waitingAlert);total=d.total;$('dashboard').hidden=false;$('login').hidden=true;$('logout').hidden=false;$('cards').replaceChildren();for(const [label,n]of [['累計対局',d.summary.total],['今日の対局',d.summary.today],['終了した対局',d.summary.completed],['現在の対局',d.summary.active],['待機人数',d.summary.waiting],['CPU対局中',d.summary.cpuActive??0]]){const el=document.createElement('div');el.className='card';el.textContent=label;const value=document.createElement('strong');value.textContent=n;el.append(value);$('cards').append(el)}if(d.summary.storageError)$('error').textContent='履歴の保存に失敗しています。サーバーの保存先を確認してください。';$('rows').replaceChildren();for(const r of d.items){const tr=document.createElement('tr');cell(tr,date(r.startedAt));cell(tr,r.nicknames.sente);cell(tr,r.nicknames.gote);cell(tr,result(r));cell(tr,r.moveCount);cell(tr,r.finishedAt?Math.round((r.finishedAt-r.startedAt)/1000)+'秒':'—');const td=cell(tr,'');const b=document.createElement('button');b.textContent='詳細';b.onclick=()=>detail(r.id);td.append(b);$('rows').append(tr)}$('page').textContent=total?`${offset+1}–${Math.min(offset+50,total)} / ${total}件`:'履歴はまだありません';$('prev').disabled=offset===0;$('next').disabled=offset+50>=total}catch(e){stopAlarm();if(password===currentPassword)$('error').textContent=e.message}finally{loading=false}}
 $('login').onsubmit=e=>{e.preventDefault();password=$('password').value;$('password').value='';offset=0;load()};$('search').onsubmit=e=>{e.preventDefault();offset=0;load()};$('refresh').onclick=load;$('prev').onclick=()=>{offset=Math.max(0,offset-50);load()};$('next').onclick=()=>{offset+=50;load()};$('closeDetail').onclick=()=>$('details').close();$('logout').onclick=()=>{stopAlerts();alertEpoch=null;password='';$('dashboard').hidden=true;$('login').hidden=false;$('logout').hidden=true;$('rows').replaceChildren();$('cards').replaceChildren();$('moves').replaceChildren();$('detailMeta').textContent='';$('error').textContent='';$('details').close()};
 setInterval(()=>{if(!$('dashboard').hidden)load()},5000);
 </script></html>
