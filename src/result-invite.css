@@ -11,3 +11,14 @@
 .result-overlay--cpu-invite .result-overlay__actions { width:100%; }
 .result-overlay--cpu-invite .result-overlay__actions button { min-width:0; flex:1; padding-inline:10px; }
 .result-overlay__online { min-width:0; width:min(80%,300px); }
+
+.result-overlay .result-overlay__online {
+  border: 2px solid #b5f5ff;
+  background: linear-gradient(135deg, #83efff, #27bce8);
+  color: #062d42;
+  text-shadow: none;
+  box-shadow: 0 0 20px rgba(39,188,232,.55), inset 0 1px 0 rgba(255,255,255,.6);
+}
+.result-overlay .result-overlay__online:hover {
+  filter: brightness(1.15);
+}
