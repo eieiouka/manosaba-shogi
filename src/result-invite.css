@@ -22,3 +22,52 @@
 .result-overlay .result-overlay__online:hover {
   filter: brightness(1.15);
 }
+
+/* CPU勝利ポップアップを盤面の横幅に比例させる */
+.result-overlay--cpu-invite {
+  container-type: inline-size;
+  padding: 0;
+}
+.result-overlay--cpu-invite .result-overlay__panel {
+  box-sizing: border-box;
+  width: 94%;
+  max-width: none;
+  min-width: 0;
+  padding: 4cqw 2cqw;
+  gap: 3cqw;
+  font-size: 12cqw;
+}
+.result-overlay--cpu-invite .result-overlay__text {
+  white-space: nowrap;
+}
+.result-overlay--cpu-invite .result-overlay__invite {
+  margin: 0;
+  font-size: 3.5cqw;
+  line-height: 1.6;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+.result-overlay--cpu-invite .result-overlay__online {
+  box-sizing: border-box;
+  width: 48cqw;
+  min-width: 0;
+  max-width: none;
+  padding: 2.2cqw 3cqw;
+  font-size: 4cqw;
+  border-radius: 8cqw;
+  white-space: nowrap;
+}
+.result-overlay--cpu-invite .result-overlay__actions {
+  width: 100%;
+  gap: 2cqw;
+}
+.result-overlay--cpu-invite .result-overlay__actions button {
+  box-sizing: border-box;
+  flex: 1 1 0;
+  width: 0;
+  min-width: 0;
+  padding: 2.2cqw 1cqw;
+  font-size: 4cqw;
+  border-radius: 8cqw;
+  white-space: nowrap;
+}
