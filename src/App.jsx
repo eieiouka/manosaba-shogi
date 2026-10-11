@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 import "./App.css";
 import "./online/online.css";
+import {useCpuPresence} from "./online/useCpuPresence.js";
 import {useOnline} from "./online/useOnline.js";
 import NicknameReset from "./online/NicknameReset.jsx";
 import RankLabel from "./online/RankLabel.jsx";
@@ -120,6 +121,7 @@ export default function App(){
  const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
+ useCpuPresence(started&&mode==="ai"&&!gameOver);
  const seen=useMemo(()=>timeline.map(stateKey),[timeline]);
  const legal=useMemo(()=>gameOver?[]:generateAllLegalActions(state),[state,gameOver]);
  const selectable=useMemo(()=>legal.filter(a=>a.category==="drop"?handType!==null&&a.piece.type===handType:selected&&a.from?.[0]===selected[0]&&a.from?.[1]===selected[1]),[legal,selected,handType]);

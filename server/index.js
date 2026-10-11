@@ -6,8 +6,11 @@ import {createHistory} from './history.js';
 import {createProfiles} from './profiles.js';
 import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite,positionKey} from '../src/game/rules.js';
 export const key = positionKey;
-export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
+export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,cpuPresenceTtlMs=30000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
  const sessions=new Map(),matches=new Map(),queue=[];
+ const cpuPlayers=new Map();
+ const pruneCpu=()=>{const now=Date.now();for(const [id,p]of cpuPlayers)if(now-p.at>=cpuPresenceTtlMs)cpuPlayers.delete(id)};
+ const cpuCount=()=>{pruneCpu();let count=0;for(const p of cpuPlayers.values())if(p.active)count++;return count};
  const history=createHistory(historyPath);
  const profiles=createProfiles(profilesPath);
  const updateRanks=m=>{if(m.rankProcessed)return;m.rankProcessed=true;try{
@@ -66,7 +69,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
     const offset=Math.max(0,Math.trunc(Number(requestUrl.searchParams.get('offset'))||0));
     const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'});
     const today=day.format(now);
-    adminJson(200,{summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,storageError:history.storageError},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
+    adminJson(200,{summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,cpuActive:cpuCount(),storageError:history.storageError},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
    }
    if(requestUrl.pathname==='/admin/match'){
     const r=history.get(requestUrl.searchParams.get('id'));
@@ -81,6 +84,17 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
   if(req.method==='OPTIONS'){res.writeHead(204).end();return}
   const url=new URL(req.url,'http://localhost');
   const json=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data))};
+  if(req.method==='POST'&&url.pathname==='/cpu-presence'){
+   let raw='';try{
+    for await(const chunk of req){raw+=chunk;if(raw.length>1024){json(413,{error:'too large'});return}}
+    const body=JSON.parse(raw||'{}');
+    if(typeof body.id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.id)||typeof body.active!=='boolean'||!Number.isSafeInteger(body.sequence)||body.sequence<1){json(400,{error:'invalid presence'});return}
+    pruneCpu();const old=cpuPlayers.get(body.id);
+    if(!old&&cpuPlayers.size>=2000){json(503,{error:'busy'});return}
+    if(!old||body.sequence>old.sequence)cpuPlayers.set(body.id,{active:body.active,sequence:body.sequence,at:Date.now()});
+    json(200,{ok:true});
+   }catch{json(400,{error:'invalid JSON'})}return;
+  }
   if(url.pathname==='/health'){json(200,{ok:true});return}
   if(req.method==='POST'&&url.pathname==='/player'){
    try{json(200,profiles.register())}catch{json(503,{error:'プロフィールを保存できません。再度お試しください'})}return;
@@ -148,12 +162,12 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
   const disconnected=m.players.filter(p=>p.disconnectedAt&&now-p.disconnectedAt>=graceMs);
   if(disconnected.length===2)finish(m,null,'disconnected');else if(disconnected.length===1)finish(m,disconnected[0]===m.players[0]?'gote':'sente','disconnected');else settle(m);
  }for(const [token,p]of sessions){if(!p.stream&&(!p.match||p.match.result)&&now-p.lastSeen>300000){removeQueue(p);sessions.delete(token)}}},50);
- const presenceTimer=setInterval(presence,1000);
+ const presenceTimer=setInterval(()=>{presence();pruneCpu()},1000);
  const heartbeat=setInterval(()=>sessions.forEach(p=>send(p,{type:'heartbeat'})),10000);
  server.on('close',()=>{clearInterval(tick);clearInterval(heartbeat);clearInterval(presenceTimer);sessions.forEach(p=>p.stream?.end())});
  return server;
 }
 if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  const origins=(process.env.ALLOWED_ORIGINS||'http://localhost:5173').split(',').map(s=>s.trim());
- createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening [wait-estimate-v4]'));
+ createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening [cpu-presence-v1]'));
 }
