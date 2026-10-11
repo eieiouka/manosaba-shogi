@@ -16,7 +16,7 @@ async function detail(id){try{const r=await api('/admin/match?id='+encodeURIComp
 let notifyOn=false,audio=null,desktopNotice=null,alertEpoch=null,lastAlert=0,watchId='';
 try{watchId=localStorage.getItem('manosaba-admin-watch')||''}catch{}
 function stopAlerts(){stopAlarm();desktopNotice?.close();desktopNotice=null;notifyOn=false;$('toggleAlert').textContent='待機通知OFF';$('toggleAlert').setAttribute('aria-pressed','false');$('waitingNotice').textContent=''}
-$('linkGame').onclick=()=>{watchId=crypto.randomUUID();try{localStorage.setItem('manosaba-admin-watch',watchId)}catch{}stopAlerts();alertEpoch=null;window.open('https://manosaba-shogi.vercel.app/?adminNotifyId='+encodeURIComponent(watchId),'manosaba-admin-game');load()};
+$('linkGame').onclick=()=>{watchId=watchId||crypto.randomUUID();try{localStorage.setItem('manosaba-admin-watch',watchId)}catch{}stopAlerts();alertEpoch=null;window.open('https://manosaba-shogi.vercel.app/?adminNotifyId='+encodeURIComponent(watchId),'manosaba-admin-game');load()};
 $('toggleAlert').onclick=async()=>{
  if(!watchId){$('alertState').textContent='先にゲーム画面を開いて連携してください';return}
  if(notifyOn){stopAlerts();return}
@@ -46,7 +46,7 @@ function beepTriplet(){
 function checkWaiting(data){
  if(!data){stopAlarm();return}
  const known=data.activity.known,busy=data.activity.busy,lone=data.lonely;
- $('alertState').textContent=!notifyOn?'通知OFF':!known?'連携確認待ち・通知停止中':busy?'あなたが対局中・通知停止中':lone&&!lone.eligible?'1人だけの待機が1分続くか確認中':'対人戦0局・1人待機が1分続いたら通知します';
+ $('alertState').textContent=!notifyOn?'通知OFF':!known?'ゲーム状態の受信待ち・ゲームタブを一度表示してください':busy?'あなたが対局中・通知停止中':lone&&!lone.eligible?'1人だけの待機が1分続くか確認中':'対人戦0局・1人待機が1分続いたら通知します';
  if(!notifyOn||!known||busy||!lone?.eligible){stopAlarm();return}
  const key=data.epoch+':'+lone.id;
  if(alarmId===key)return;

@@ -6,7 +6,7 @@ import {createHistory} from './history.js';
 import {createProfiles} from './profiles.js';
 import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite,positionKey} from '../src/game/rules.js';
 export const key = positionKey;
-export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,cpuPresenceTtlMs=30000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
+export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,cpuPresenceTtlMs=30000,adminActivityTtlMs=86400000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
  const sessions=new Map(),matches=new Map(),queue=[];
  const cpuPlayers=new Map(),adminActivity=new Map();
  let lone=null;
@@ -18,7 +18,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
  };
  const lonelyWaiting=()=>{refreshLone();return lone?{id:lone.id,since:lone.since,nickname:lone.nickname,eligible:Date.now()-lone.since>=60000}:null};
  const waitingEvents=[];let waitingSequence=0;const waitingEpoch=randomUUID();
- const pruneActivity=()=>{for(const [id,p]of adminActivity)if(Date.now()-p.at>=30000)adminActivity.delete(id)};
+ const pruneActivity=()=>{for(const [id,p]of adminActivity)if(Date.now()-p.at>=adminActivityTtlMs)adminActivity.delete(id)};
  const pruneCpu=()=>{const now=Date.now();for(const [id,p]of cpuPlayers)if(now-p.at>=cpuPresenceTtlMs)cpuPlayers.delete(id)};
  const cpuCount=()=>{pruneCpu();let count=0;for(const p of cpuPlayers.values())if(p.active)count++;return count};
  const history=createHistory(historyPath);
@@ -79,7 +79,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
     const offset=Math.max(0,Math.trunc(Number(requestUrl.searchParams.get('offset'))||0));
     const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'});
     const today=day.format(now);
-    adminJson(200,{summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,cpuActive:cpuCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<30000);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
+    adminJson(200,{summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,cpuActive:cpuCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<adminActivityTtlMs);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
    }
    if(requestUrl.pathname==='/admin/match'){
     const r=history.get(requestUrl.searchParams.get('id'));
@@ -150,7 +150,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
    if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
    try{profiles.name(profile,nickname)}catch(e){json(e.code==='nickname-taken'?409:503,{error:e.code==='nickname-taken'?e.message:'プロフィールを保存できません',code:e.code});return}
    p.profile=profile;p.nickname=nickname;
-   p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(170,191);p.waitEstimateSeconds=undefined;queue.push(p);waitingEvents.push({sequence:++waitingSequence,nickname:p.nickname,at:Date.now(),busyWatch:[...new Set([...adminActivity.values()].filter(a=>a.active&&Date.now()-a.at<30000).map(a=>a.id))]});if(waitingEvents.length>200)waitingEvents.shift();refreshLone()}send(p,{type:'queued'});match();json(200,{ok:true});return;
+   p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(170,191);p.waitEstimateSeconds=undefined;queue.push(p);waitingEvents.push({sequence:++waitingSequence,nickname:p.nickname,at:Date.now(),busyWatch:[...new Set([...adminActivity.values()].filter(a=>a.active&&Date.now()-a.at<adminActivityTtlMs).map(a=>a.id))]});if(waitingEvents.length>200)waitingEvents.shift();refreshLone()}send(p,{type:'queued'});match();json(200,{ok:true});return;
   }
   if(url.pathname==='/cancel'){removeQueue(p);send(p,{type:'idle'});json(200,{ok:true});return}
   const m=p.match;if(!m||body.id!==m.id){json(409,{error:'対局がありません'});return}settle(m);
@@ -181,5 +181,5 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=20000
 }
 if(process.argv[1]&&pathToFileURL(process.argv[1]).href===import.meta.url){
  const origins=(process.env.ALLOWED_ORIGINS||'http://localhost:5173').split(',').map(s=>s.trim());
- createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening [lonely-wait-alert-v1]'));
+ createGameServer({origins}).listen(Number(process.env.PORT||3001),'0.0.0.0',()=>console.log('Manosaba online server listening [stable-admin-link-v2]'));
 }
