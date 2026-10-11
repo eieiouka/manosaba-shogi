@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from "react";
 import "./App.css";
 import "./online/online.css";
+import {useAdminActivity} from "./online/useAdminActivity.js";
 import {useCpuPresence} from "./online/useCpuPresence.js";
 import {useOnline} from "./online/useOnline.js";
 import NicknameReset from "./online/NicknameReset.jsx";
@@ -122,6 +123,7 @@ export default function App(){
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
  useCpuPresence(started&&mode==="ai"&&!gameOver);
+ useAdminActivity(started&&!gameOver);
  const seen=useMemo(()=>timeline.map(stateKey),[timeline]);
  const legal=useMemo(()=>gameOver?[]:generateAllLegalActions(state),[state,gameOver]);
  const selectable=useMemo(()=>legal.filter(a=>a.category==="drop"?handType!==null&&a.piece.type===handType:selected&&a.from?.[0]===selected[0]&&a.from?.[1]===selected[1]),[legal,selected,handType]);
