@@ -416,3 +416,19 @@ export function actionLabel(state,action) {
   const p=state.board[action.from[0]][action.from[1]];
   return `${state.turn==="sente"?"▲":"△"}${PIECES[p.type].short} ${squareName(...action.from)}→${squareName(...action.to)}${action.magic?` ${action.magic}`:""}${action.promote?" 成":""}`;
 }
+
+// Piece identities, lastMove and hand order do not change a position.
+export function positionKey(state) {
+  return JSON.stringify([state.turn,
+    state.board.map(row=>row.map(piece=>piece ? [piece.type,piece.side,Boolean(piece.promoted)] : null)),
+    ["sente","gote"].map(side=>state.hands[side].map(piece=>piece.type).sort())]);
+}
+export function repetitionResult(state, history) {
+  const key=positionKey(state);
+  let count=0;
+  for(const previous of history) {
+    if(positionKey(previous)===key && ++count>=3)
+      return {score:0,winner:null,reason:"repetition"};
+  }
+  return null;
+}

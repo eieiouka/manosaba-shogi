@@ -4,8 +4,8 @@ import {randomUUID, randomInt,createHash,timingSafeEqual} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {createHistory} from './history.js';
 import {createProfiles} from './profiles.js';
-import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite} from '../src/game/rules.js';
-export const key = s => JSON.stringify([s.turn,s.board.map(r=>r.map(p=>p&&[p.type,p.side,p.promoted])),['sente','gote'].map(side=>s.hands[side].map(p=>p.type).sort())]);
+import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite,positionKey} from '../src/game/rules.js';
+export const key = positionKey;
 export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
  const sessions=new Map(),matches=new Map(),queue=[];
  const history=createHistory(historyPath);
