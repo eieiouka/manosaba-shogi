@@ -6,7 +6,7 @@ import {createHistory} from './history.js';
 import {createProfiles} from './profiles.js';
 import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite,positionKey} from '../src/game/rules.js';
 export const key = positionKey;
-export function createGameServer({origins=['http://localhost:5173'],turnMs=20000,graceMs=20000,animationMs=1100,startDelayMs=3000,cpuPresenceTtlMs=30000,adminActivityTtlMs=86400000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
+export function createGameServer({origins=['http://localhost:5173'],turnMs=30000,graceMs=20000,animationMs=1100,startDelayMs=3000,cpuPresenceTtlMs=30000,adminActivityTtlMs=86400000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
  const sessions=new Map(),matches=new Map(),queue=[];
  const cpuPlayers=new Map(),adminActivity=new Map();
  let lone=null;
