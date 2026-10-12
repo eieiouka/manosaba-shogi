@@ -139,8 +139,20 @@ export default function App(){
    if(action.category==="magic"||action.longForward)targets.set(key,"magic");
    else if(!targets.has(key))targets.set(key,"normal");
   }
+  // Show Nanoka's shooting range even when no enemy occupies the target.
+  if(pieceGuide?.piece.type==="nanoka"&&pieceGuide.row!=null&&pieceGuide.col!=null){
+   const {row,col,piece}=pieceGuide;
+   const forward=piece.side==="sente"?-1:1;
+   for(const dc of [-2,0,2]){
+    const targetRow=row+2*forward,targetCol=col+dc;
+    if(targetRow<0||targetRow>=6||targetCol<0||targetCol>=6)continue;
+    if(state.board[row+forward][col+dc/2])continue;
+    if(state.board[targetRow][targetCol]?.side===piece.side)continue;
+    targets.set(`${targetRow},${targetCol}`,"magic");
+   }
+  }
   return targets;
- },[guideActions]);
+ },[guideActions,pieceGuide,state]);
 
  useEffect(()=>{worker.current=new Worker(new URL("./game/ai.worker.js",import.meta.url),{type:"module"});return()=>worker.current?.terminate()},[]);
  useEffect(()=>()=>{backgroundMusic.current?.pause();backgroundMusic.current=null},[]);
