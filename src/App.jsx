@@ -64,7 +64,7 @@ function PieceGuide({piece,onClose}){
  return <aside className="piece-guide" role="dialog" aria-label={`${PIECES[piece.type].name}の動き`}>
   <div className="piece-guide__heading"><strong>{PIECES[piece.type].name}</strong><span>{piece.promoted?"魔女化":"通常"}</span><button type="button" onClick={onClose} aria-label="閉じる">×</button></div>
   <p className="piece-guide__move"><b>通常移動</b>{guide.move}</p>
-  <p className="piece-guide__ability"><b>{guide.magicName}</b>{guide.magic}</p>
+  <p className="piece-guide__ability"><b>{guide.magicName}</b>{piece.type==="sherry"&&piece.promoted?"前方へ2マス移動できます。着地点に駒がある場合も取れます。":guide.magic}</p>
  </aside>;
 }
 
