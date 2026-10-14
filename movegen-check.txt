@@ -1,0 +1,161 @@
+﻿
+  template<Color Us, GenType Type>
+  ExtMove* generate_magical_moves(const Position& pos, ExtMove* moveList) {
+
+    if (!pos.magical_shogi() || Type == QUIET_CHECKS)
+        return moveList;
+
+    constexpr Direction Up = Us == WHITE ? NORTH : SOUTH;
+    const Color Them = ~Us;
+
+    for (PieceSet ps = pos.piece_types(); ps;)
+    {
+        PieceType pt = pop_lsb(ps);
+        char role = pos.magical_role(pt);
+        if (role != 'n' && role != 'i' && role != 'm')
+            continue;
+
+        Bitboard bb = pos.pieces(Us, pt);
+        while (bb)
+        {
+            Square from = pop_lsb(bb);
+            int ff = int(file_of(from));
+            int fr = int(rank_of(from));
+            auto addSquare = [&](int tf, int tr, char expected) {
+                if (tf < int(FILE_A) || tf > int(pos.max_file()) || tr < int(RANK_1) || tr > int(pos.max_rank()))
+                    return;
+                Square to = make_square(File(tf), Rank(tr));
+                if (expected == 'e' && !(pos.pieces(Them) & to))
+                    return;
+                if (expected == 'f' && !(pos.pieces(Us) & to))
+                    return;
+                if (expected == '0' && !pos.empty(to))
+                    return;
+                *moveList++ = make<SPECIAL>(from, to);
+            };
+
+            if (role == 'n' && (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS))
+            {
+                int step = Up == NORTH ? 1 : -1;
+                for (int df : {0, -2, 2})
+                {
+                    int tf = ff + df, tr = fr + 2 * step;
+                    int mf = ff + df / 2, mr = fr + step;
+                    if (mf < int(FILE_A) || mf > int(pos.max_file()) || mr < int(RANK_1) || mr > int(pos.max_rank()))
+                        continue;
+                    if (!pos.empty(make_square(File(mf), Rank(mr))))
+                        continue;
+                    addSquare(tf, tr, 'e');
+                }
+            }
+            else if (role == 'i' && (Type == QUIETS || Type == EVASIONS || Type == NON_EVASIONS))
+            {
+                for (int dr = -1; dr <= 1; ++dr)
+                    for (int df = -1; df <= 1; ++df)
+                        if (df || dr)
+                            addSquare(ff + df, fr + dr, 'f');
+            }
+            else if (role == 'm' && (Type == CAPTURES || Type == EVASIONS || Type == NON_EVASIONS))
+            {
+                int back = Up == NORTH ? -1 : 1;
+                for (auto [df, dr] : {std::pair<int,int>{-1,0}, {1,0}, {-1,back}, {0,back}, {1,back}})
+                {
+                    int mf = ff + df, mr = fr + dr;
+                    int tf = ff + 2 * df, tr = fr + 2 * dr;
+                    if (mf < int(FILE_A) || mf > int(pos.max_file()) || mr < int(RANK_1) || mr > int(pos.max_rank()))
+                        continue;
+                    Square mid = make_square(File(mf), Rank(mr));
+                    if (!(pos.pieces(Them) & mid))
+                        continue;
+                    addSquare(tf, tr, '0');
+                }
+            }
+        }
+    }
+    return moveList;
+  }
+
+  template<Color Us, GenType Type>
+  ExtMove* generate_all(const Position& pos, ExtMove* moveList) {
+
+    static_assert(Type != LEGAL, "Unsupported type in generate_all()");
+
+    constexpr bool Checks = Type == QUIET_CHECKS; // Reduce template instantiations
+    const Square ksq = pos.count<KING>(Us) ? pos.square<KING>(Us) : SQ_NONE;
+    Bitboard target;
+
+    // Skip generating non-king moves when in double check
+    if (Type != EVASIONS || !more_than_one(pos.checkers() & ~pos.non_sliding_riders()))
+    {
+        target = Type == EVASIONS     ?  between_bb(ksq, lsb(pos.checkers()))
+               : Type == NON_EVASIONS ? ~pos.pieces( Us)
+               : Type == CAPTURES     ?  pos.pieces(~Us)
+                                      : ~pos.pieces(   ); // QUIETS || QUIET_CHECKS
+
+        if (Type == EVASIONS)
+        {
+            if (pos.checkers() & pos.non_sliding_riders())
+                target = ~pos.pieces(Us);
+            // Leaper attacks can not be blocked
+            Square checksq = lsb(pos.checkers());
+            if (LeaperAttacks[~Us][type_of(pos.piece_on(checksq))][checksq] & pos.square<KING>(Us))
+                target = pos.checkers();
+            // A Nanoka shot is encoded as a leaper capture, but unlike an
+            // ordinary leaper it can be stopped by occupying its midpoint.
+            if (pos.magical_shogi() && pos.magical_role(type_of(pos.piece_on(checksq))) == 'n')
+            {
+                Square king = pos.square<KING>(Us);
+                Square midpoint = make_square(File((int(file_of(checksq)) + int(file_of(king))) / 2),
+                                              Rank((int(rank_of(checksq)) + int(rank_of(king))) / 2));
+                target |= midpoint;
+            }
+        }
+
+        // Remove inaccessible squares (outside board + wall squares)
+        target &= pos.board_bb();
+
+        moveList = generate_pawn_moves<Us, Type>(pos, moveList, target);
+        for (PieceSet ps = pos.piece_types() & ~(piece_set(PAWN) | KING); ps;)
+            moveList = generate_moves<Us, Type>(pos, moveList, pop_lsb(ps), target);
+        // generate drops
+        if (pos.piece_drops() && Type != CAPTURES && (pos.can_drop(Us, ALL_PIECES) || pos.two_boards()))
+            for (PieceSet ps = pos.piece_types(); ps;)
+                moveList = generate_drops<Us, Type>(pos, moveList, pop_lsb(ps), target & ~pos.pieces(~Us));
+
+        // Castling with non-king piece
+        if (!pos.count<KING>(Us) && Type != CAPTURES && pos.can_castle(Us & ANY_CASTLING))
+        {
+            Square from = pos.castling_king_square(Us);
+            for(CastlingRights cr : { Us & KING_SIDE, Us & QUEEN_SIDE } )
+                if (!pos.castling_impeded(cr) && pos.can_castle(cr))
+                    moveList = make_move_and_gating<CASTLING>(pos, moveList, Us, from, pos.castling_rook_square(cr));
+        }
+
+        // Special moves
+        if (pos.cambodian_moves() && pos.gates(Us) && Type != CAPTURES)
+        {
+            if (Type != EVASIONS && (pos.pieces(Us, KING) & pos.gates(Us)))
+            {
+                Square from = pos.square<KING>(Us);
+                Bitboard b = PseudoAttacks[WHITE][KNIGHT][from] & rank_bb(rank_of(from + (Us == WHITE ? NORTH : SOUTH)))
+                    & target & ~pos.pieces();
+                while (b)
+                    moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, from, pop_lsb(b));
+            }
+
+            Bitboard b = pos.pieces(Us, FERS) & pos.gates(Us);
+            while (b)
+            {
+                Square from = pop_lsb(b);
+                Square to = from + 2 * (Us == WHITE ? NORTH : SOUTH);
+                if (is_ok(to) && (target & to & ~pos.pieces()))
+                    moveList = make_move_and_gating<SPECIAL>(pos, moveList, Us, from, to);
+            }
+        }
+
+        moveList = generate_magical_moves<Us, Type>(pos, moveList);
+
+        // Workaround for passing: Execute a non-move with any piece
+        if (pos.pass(Us) && !pos.count<KING>(Us) && pos.pieces(Us))
+            *moveList++ = make<SPECIAL>(lsb(pos.pieces(Us)), lsb(pos.pieces(Us)));
+

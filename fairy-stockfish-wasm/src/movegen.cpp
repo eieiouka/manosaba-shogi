@@ -501,6 +501,35 @@ namespace {
             }
         }
 
+        // Margo evasion: occupy the landing square.
+        if (Type == EVASIONS && pos.magical_shogi())
+        {
+            for (Bitboard checkers = pos.checkers(); checkers;)
+            {
+                Square checker = pop_lsb(checkers);
+                if (pos.magical_role(type_of(pos.piece_on(checker))) != 'm')
+                    continue;
+
+                int df = int(file_of(ksq)) - int(file_of(checker));
+                int dr = int(rank_of(ksq)) - int(rank_of(checker));
+                int back = Us == WHITE ? 1 : -1;
+
+                if (!((dr == 0 && (df == -1 || df == 1))
+                      || (dr == back && df >= -1 && df <= 1)))
+                    continue;
+
+                int lf = int(file_of(ksq)) + df;
+                int lr = int(rank_of(ksq)) + dr;
+                if (lf < int(FILE_A) || lf > int(pos.max_file())
+                    || lr < int(RANK_1) || lr > int(pos.max_rank()))
+                    continue;
+
+                Square landing = make_square(File(lf), Rank(lr));
+                if (pos.empty(landing))
+                    target |= landing;
+            }
+        }
+
         // Remove inaccessible squares (outside board + wall squares)
         target &= pos.board_bb();
 
