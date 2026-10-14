@@ -405,3 +405,8 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
   .piece-guide__heading button { width:8vw; height:8vw; }
   .piece-guide p { margin:1.2vw 0; font-size:3.1vw; }
 }
+/* Learning mode home navigation */
+.title-screen__duo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:1.35vw}
+.title-screen__duo>button{min-width:0;width:100%;padding-left:.5vw;padding-right:.5vw;letter-spacing:.03em;font-size:clamp(12px,1.85vw,32px)}
+.title-screen__learn{background:linear-gradient(135deg,#ffe5cf,#d79c80 48%,#975b63);border-color:#f5d2c9}
+@media(max-width:760px) and (hover:none) and (pointer:coarse){.title-screen__duo{gap:2.5vw}.title-screen__duo>button{font-size:4vw;padding:3vw 1vw}}

@@ -8,6 +8,7 @@ import NicknameReset from "./online/NicknameReset.jsx";
 import RankLabel from "./online/RankLabel.jsx";
 import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,applyLegalAction,terminalResult,repetitionResult,isEmmaInCheck} from "./game/rules.js";
 import "./result-invite.css";
+import LearningMode from "./LearningMode.jsx";
 import {stateKey} from "./game/aiEngine.js";
 
 const randomSide=()=>Math.random()<.5?"sente":"gote";
@@ -83,6 +84,7 @@ function HowToPlayDialog({onClose}){
 export default function App(){
  const initial=useMemo(()=>makeInitialState(),[]);
  const [started,setStarted]=useState(false);
+  const [learningOpen,setLearningOpen]=useState(false);
  const [mode,setMode]=useState("ai");
  const [humanSide,setHumanSide]=useState("sente");
  const opponentSide=humanSide==="sente"?"gote":"sente";
@@ -374,7 +376,7 @@ export default function App(){
   <div className="title-screen__shade" aria-hidden="true"/>
  <h2 className="title-screen__logo"><span style={{display:"block",fontSize:"50%",lineHeight:1.5}}>【非公式作品】<br />計画性のないナノカちゃん作</span>魔法少女ノ魔法将棋</h2>
  <div className="title-screen__actions">
-   <button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>AI対戦</button>
+   <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>AI対戦</button><button className="title-screen__start title-screen__learn" onClick={()=>setLearningOpen(true)}>ラーニング</button></div>
    <button className="title-screen__start" onClick={()=>online.queue()} disabled={online.status==="connecting"||online.status==="queued"}>オンライン対戦</button>
    <a className="title-screen__shop" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a>
   </div>
