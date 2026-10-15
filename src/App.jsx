@@ -8,7 +8,7 @@ import NicknameReset from "./online/NicknameReset.jsx";
 import RankLabel from "./online/RankLabel.jsx";
 import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,applyLegalAction,terminalResult,repetitionResult,isEmmaInCheck} from "./game/rules.js";
 import "./result-invite.css";
-import LearningMode from "./LearningMode.jsx";
+import "./online/nickname-reset.css";
 import {stateKey} from "./game/aiEngine.js";
 
 const randomSide=()=>Math.random()<.5?"sente":"gote";
@@ -26,6 +26,28 @@ const PIECE_GUIDES={
  sherry:{move:"前に1マス移動できますが、駒を取れません。駒を取る時だけは、斜め前に1マス移動できます。魔女化後は8方向1マスと前2マスへ移動できます。",magicName:"全力突進",magic:"前方へ2マス移動できます。途中・着地点に駒がある場合は進めません。"},
  margo:{move:"前・斜め前に1マス、魔女化後は8方向に1マス移動できます。",magicName:"跳躍暗殺",magic:"着地点が空いていれば、横・斜め後ろ・後ろ側の敵を飛び越え、取ることができます。"},
 };
+// 各レベルの開始局面。board は6×6、hands は両陣営の持ち駒です。
+// setup を省略したレベルは通常の初期配置を使用します。
+const LEARNING_LEVELS = [
+ {id:"nanoka-1", title:"ナノカの動かし方①", chapter:"第1章　1節", setup:null, lines:[
+  "こんにちは！黒部ナノカです。まずは駒をタップして、動かせる場所を見てみましょう。",
+  "駒を長押しすると、移動範囲と特殊能力を確認できます。",
+  "ナノカは前と左右に1マス動けます。遠くの敵には射撃もできます。",
+  "盤面の操作や持ち駒の使い方は、いつもの対戦と同じです。",
+ ]},
+];
+function learningStartState(level){
+ const base=makeInitialState();
+ if(!level.setup)return base;
+ // setup.board は6行×6列の配列。空マスは null。
+ // 駒は {type:"nanoka",side:"sente",promoted:false,id:"..."} 形式。
+ const setup=level.setup;
+ if(setup.board&&(!Array.isArray(setup.board)||setup.board.length!==6||setup.board.some(row=>!Array.isArray(row)||row.length!==6)))throw new Error("学習盤面は6×6で指定してください");
+ return {...base,
+  ...(setup.board?{board:setup.board.map(row=>row.map(piece=>piece?{...piece}:null))}:{}),
+  ...(setup.hands?{hands:{sente:(setup.hands.sente||[]).map(p=>({...p})),gote:(setup.hands.gote||[]).map(p=>({...p}))}}:{}),
+  ...(setup.turn?{turn:setup.turn}:{})};
+}
 const MOBILE_LAYOUT_QUERY="(max-width: 760px) and (hover: none) and (pointer: coarse)";
 const imageFor=p=>`/images/pieces/${p.type}_${p.promoted?"red":"black"}.png`;
 
@@ -84,8 +106,10 @@ function HowToPlayDialog({onClose}){
 export default function App(){
  const initial=useMemo(()=>makeInitialState(),[]);
  const [started,setStarted]=useState(false);
-  const [learningOpen,setLearningOpen]=useState(false);
  const [mode,setMode]=useState("ai");
+  const [confirmLearningBack,setConfirmLearningBack]=useState(false);
+  const [learningDialogue,setLearningDialogue]=useState(0);
+  const [learningLevelIndex,setLearningLevelIndex]=useState(0);
  const [humanSide,setHumanSide]=useState("sente");
  const opponentSide=humanSide==="sente"?"gote":"sente";
  const [timeline,setTimeline]=useState([initial]);
@@ -105,6 +129,7 @@ export default function App(){
  const [mobileLayout,setMobileLayout]=useState(()=>typeof window!=="undefined"&&window.matchMedia(MOBILE_LAYOUT_QUERY).matches);
  const worker=useRef(null),request=useRef(0),motionFxRef=useRef(null),motionSequence=useRef(0),backgroundMusic=useRef(null);
  const guideTimer=useRef(null),guideTriggered=useRef(false);
+ const learningGeneration=useRef(0);
  const state=timeline[timeline.length-1];
  const online=useOnline(data=>{
   if(data.action)beginMotion(data.action,state);
@@ -209,7 +234,7 @@ export default function App(){
   return()=>clearTimeout(timer);
  },[result,finishFxDone,humanSide]);
  useEffect(()=>{
-  if(mode==="online"||!started||gameOver||!worker.current)return;
+  if(mode==="online"||mode==="learning"||!started||gameOver||!worker.current)return;
   if(state.turn===humanSide){worker.current.postMessage({type:"ponder",state,seen,minDepth:difficultyDepth,...((waitingCpu||difficultyDepth===1||difficultyDepth===5)?{maxDepth:waitingCpu?5:difficultyDepth}:{})});return}
   setThinking(true);
   const id=++request.current;
@@ -234,11 +259,13 @@ export default function App(){
  },[state,gameOver,seen,humanSide,started,difficultyDepth,mode,waitingCpu]);
 
  async function commitAction(action,before){
+  const generation=learningGeneration.current;
   await beginMotion(action,before);
+  if(mode==="learning"&&generation!==learningGeneration.current)return;
   setTimeline(x=>[...x,applyLegalAction(x[x.length-1],action)]);
  }
  function play(action){
-  if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver)return;
+  if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver||learningBoardLocked)return;
   if(mode==="online")online.move(action);else commitAction(action,state);
   setSelected(null);setHandType(null);
  }
@@ -256,7 +283,7 @@ export default function App(){
  function click(row,col){
   if(guideTriggered.current){guideTriggered.current=false;return}
   if(pieceGuide){setPieceGuide(null);return}
-  if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver)return;
+  if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver||learningBoardLocked)return;
   const choices=selectable.filter(a=>a.to[0]===row&&a.to[1]===col);
   if(choices.length){play(choices.find(a=>a.magic)||choices[0]);return}
   const piece=state.board[row][col];
@@ -284,6 +311,45 @@ export default function App(){
   backgroundMusic.current.play().catch(error=>console.error("BGMの再生に失敗しました:",error));
   motionFxRef.current=null;setDifficultyDepth(depth);setDifficultyPrompt(null);setHumanSide(randomSide());setTimeline([makeInitialState()]);setSelected(null);setHandType(null);setThinking(false);setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);setStarted(true);
  }
+ function startLearning(){
+  learningGeneration.current++;
+  setLearningLevelIndex(0);
+  request.current++;worker.current?.postMessage({type:"reset"});
+  setMode("learning");setHumanSide("sente");setTimeline([learningStartState(LEARNING_LEVELS[0])]);
+  setSelected(null);setHandType(null);setThinking(false);setResigned(false);
+  setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);motionFxRef.current=null;
+  setLearningDialogue(0);setConfirmLearningBack(false);setStarted(true);
+  backgroundMusic.current?.pause();
+  backgroundMusic.current=new Audio("/audio/learning-bgm.mp3");
+  backgroundMusic.current.loop=true;backgroundMusic.current.volume=.3;
+  backgroundMusic.current.play().catch(()=>{});
+ }
+ function restoreLearningLevel(levelIndex=learningLevelIndex){
+  learningGeneration.current++;
+  request.current++;worker.current?.postMessage({type:"reset"});
+  clearTimeout(guideTimer.current);guideTriggered.current=false;
+  motionSequence.current++;
+  setTimeline([learningStartState(LEARNING_LEVELS[levelIndex])]);
+  setSelected(null);setHandType(null);setPieceGuide(null);setThinking(false);
+  setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);
+  setMotionFx(null);motionFxRef.current=null;
+ }
+ function resetLearning(){
+  restoreLearningLevel();setLearningDialogue(0);
+ }
+ function previousLearningPage(){
+  if(learningDialogue<=0)return;
+  restoreLearningLevel();
+  setLearningDialogue(n=>Math.max(0,n-1));
+ }
+ function leaveLearning(){
+  learningGeneration.current++;
+  request.current++;worker.current?.postMessage({type:"reset"});
+  backgroundMusic.current?.pause();backgroundMusic.current=null;
+  setConfirmLearningBack(false);setStarted(false);setMode("ai");
+ }
+ const learningLines=LEARNING_LEVELS[learningLevelIndex].lines;
+ const learningBoardLocked=mode==="learning"&&(learningDialogue!==learningLines.length-1||timeline.length>1);
  async function beginMotion(action,before){
   const moving=action.category==="drop"?action.piece:before.board[action.from[0]][action.from[1]];
   const captureAt=action.swap?null:action.captureAt??(before.board[action.to[0]][action.to[1]]?[...action.to]:null);
@@ -309,7 +375,7 @@ export default function App(){
 
  const showCpuInvite=mode==="ai"&&!resigned&&result?.winner===humanSide;
  const targets=new Map(selectable.map(a=>[`${a.to[0]},${a.to[1]}`,a]));
- const endMessage=resigned?"敗北…":result&&finishFxDone&&resultRevealReady?(result.winner===null?"引き分け":result.winner===humanSide?"勝利！":"敗北…"):"";
+ const endMessage=mode==="learning"?"":resigned?"敗北…":result&&finishFxDone&&resultRevealReady?(result.winner===null?"引き分け":result.winner===humanSide?"勝利！":"敗北…"):"";
  const pieceFxClass=piece=>{
   if(!piece||piece.type!=="ema"||!finishFx)return"";
   if((finishFx.phase==="try-transform"||finishFx.phase==="try-arrow")&&piece.side===finishFx.winner)return" ema--try-glow";
@@ -376,7 +442,7 @@ export default function App(){
   <div className="title-screen__shade" aria-hidden="true"/>
  <h2 className="title-screen__logo"><span style={{display:"block",fontSize:"50%",lineHeight:1.5}}>【非公式作品】<br />計画性のないナノカちゃん作</span>魔法少女ノ魔法将棋</h2>
  <div className="title-screen__actions">
-   <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>AI対戦</button><button className="title-screen__start title-screen__learn" onClick={()=>setLearningOpen(true)}>ラーニング</button></div>
+   <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>AI対戦</button><button className="title-screen__start title-screen__learning" onClick={startLearning}>ラーニング</button></div>
    <button className="title-screen__start" onClick={()=>online.queue()} disabled={online.status==="connecting"||online.status==="queued"}>オンライン対戦</button>
    <a className="title-screen__shop" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a>
   </div>
@@ -384,10 +450,11 @@ export default function App(){
   {difficultyPrompt&&<DifficultyDialog onChoose={startNewMatch} onCancel={()=>setDifficultyPrompt(null)}/>} 
  </main>;
 
- return <div className="app-shell">
+ return <div className={`app-shell ${mode==="learning"?"app-shell--learning":""}`}>
   <header className="topbar">
-   <div className="branding"><div className="eyebrow">MANOSABA SHOGI</div><h1>魔法少女ノ魔法将棋</h1></div>
-   <div className="match-actions"><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></div>
+   {mode==="learning"?<button className="how-to-button learning-header-guide" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>:<div className="branding"><div className="eyebrow">MANOSABA SHOGI</div><h1>魔法少女ノ魔法将棋</h1></div>}
+   {mode==="learning"&&<div className="learning-chapter-heading" aria-label={`${LEARNING_LEVELS[learningLevelIndex].chapter} ${LEARNING_LEVELS[learningLevelIndex].title}`}><span>{LEARNING_LEVELS[learningLevelIndex].chapter}</span><strong>{LEARNING_LEVELS[learningLevelIndex].title}</strong></div>}
+   <div className="match-actions">{mode==="learning"?<><button className="resign-button" onClick={resetLearning}>再挑戦</button><button onClick={()=>setConfirmLearningBack(true)}>章選択</button></>:<><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></>}</div>
   </header>
   {mode==="online"&&<div className="online-bar" role="status">
    <div className="online-bar__opponent"><span>VS {online.match?.nicknames?.[opponentSide]||"相手"}</span>{online.match?.profiles?.[opponentSide]?.rank&&<span className="opponent-rank-badge" aria-label={`相手の段位 ${online.match.profiles[opponentSide].rank}`}><RankLabel rank={online.match.profiles[opponentSide].rank}/></span>}</div>
@@ -397,9 +464,11 @@ export default function App(){
   <main className="game-stage">
    <Hand className="hand--opponent" title="相手の持ち駒" pieces={visibleHand(opponentSide)} disabled activeType={null} onPick={()=>{}} perspective={humanSide} reverse onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${pieceGuide?.row===r&&pieceGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${showCpuInvite?"result-overlay--cpu-invite":""} ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div>{showCpuInvite&&<><p className="result-overlay__invite">強いですね！対人戦もやってみませんか？</p><button className="result-overlay__again result-overlay__online" disabled={online.status==="connecting"||online.status==="queued"} onClick={()=>{setStarted(false);online.queue()}}>対人戦</button></>}<div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{backgroundMusic.current?.pause();setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
-   <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
-   <button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>
+   <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
+   {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
+  {mode==="learning"&&<div className="learning-dialogue"><img src="/images/learning/nanoka.png" alt="黒部ナノカ" onError={e=>{e.currentTarget.style.visibility="hidden"}}/><div className="learning-dialogue__body"><strong>黒部ナノカ</strong><p>{learningLines[learningDialogue]}</p><div className="learning-dialogue__nav"><button type="button" disabled={learningDialogue===0} onClick={previousLearningPage}>◀</button><span>{learningDialogue+1} / {learningLines.length}</span><button type="button" disabled={learningDialogue===learningLines.length-1} onClick={()=>setLearningDialogue(n=>Math.min(learningLines.length-1,n+1))}>▶</button></div></div></div>}
+  {mode==="learning"&&confirmLearningBack&&<div className="nickname-reset-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)setConfirmLearningBack(false)}}><section className="nickname-reset-dialog" role="dialog" aria-modal="true" aria-labelledby="learning-back-title"><h2 id="learning-back-title">タイトルに戻りますか？</h2><div className="nickname-reset-actions"><button type="button" className="nickname-reset-yes" onClick={leaveLearning}>はい</button><button type="button" data-cancel onClick={()=>setConfirmLearningBack(false)}>キャンセル</button></div></section></div>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
   {showHowTo&&<HowToPlayDialog onClose={()=>setShowHowTo(false)}/>} 
   {difficultyPrompt&&<DifficultyDialog onChoose={startNewMatch} onCancel={()=>setDifficultyPrompt(null)}/>} 
