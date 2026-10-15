@@ -567,3 +567,9 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
  .app-shell--learning .learning-chapter-heading span {font-size:clamp(8px,2vw,11px);}
  .app-shell--learning .learning-chapter-heading strong {font-size:clamp(9px,2.45vw,13px);}
 }
+
+/* V27: red progression / retry action; preserve normal navigation buttons. */
+.app-shell--learning .learning-dialogue__nav .learning-next-chapter {
+ background:#b32939; border-color:#ff8890; color:#fff; font-weight:800;
+}
+.app-shell--learning .learning-dialogue__nav .learning-next-chapter:hover {background:#d13345;}

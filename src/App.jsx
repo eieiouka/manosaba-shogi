@@ -28,14 +28,49 @@ const PIECE_GUIDES={
 };
 // 各レベルの開始局面。board は6×6、hands は両陣営の持ち駒です。
 // setup を省略したレベルは通常の初期配置を使用します。
+// ★ ナノカのセリフを編集する場所：各レベルの lines: [ ... ] を書き換えてください。
+// ★ セリフ・正解棋譜・分岐はここで編集します。
+// 棋譜表記: a1a2 (移動)、N@a2 (駒打ち)。a～f、1～6 は盤面の座標です。
+// moves は複数手を並べられます。各分岐は先頭から一致した棋譜で判定します。
 const LEARNING_LEVELS = [
- {id:"nanoka-1", title:"ナノカの動かし方①", chapter:"第1章　1節", setup:null, lines:[
-  "こんにちは！黒部ナノカです。まずは駒をタップして、動かせる場所を見てみましょう。",
-  "駒を長押しすると、移動範囲と特殊能力を確認できます。",
-  "ナノカは前と左右に1マス動けます。遠くの敵には射撃もできます。",
-  "盤面の操作や持ち駒の使い方は、いつもの対戦と同じです。",
- ]},
+ {id:"nanoka-1", title:"ナノカの動かし方①", chapter:"第1章　1節", setup:null,
+  lines:[
+   "黒部ナノカよ。まずは、凄くて偉くて天才な私の動かし方を学ぶのよ。",
+   "駒を長押しすると、移動範囲と特殊能力を確認できるわ。",
+   "私は最強の駒だから、序盤から前に出すのがセオリーよ。",
+   "実際に操作して理解しなさい。私を二段目（前）に出して。",
+  ],
+  // 1手目はナノカを自陣1段目から前へ1マス。後で棋譜配列にも置換可能。
+  correct:[{piece:"nanoka",fromRank:1,toRank:2,forward:true}],
+  successLines:["そう、それでいいのよ。私を前に出せば、攻撃の準備ができるわ。", "これで基本の動きは覚えたわね。次の章へ進みなさい。"],
+  // moves:["a1a2"] のように棋譜を指定すると特定手順だけに反応します。
+  branches:[
+   {id:"nanoka-side",when:{piece:"nanoka"},lines:["そっちじゃないわ。私は一段前に出してほしいのよ。"]},
+   {id:"other-piece",when:{notPiece:"nanoka"},lines:["私を動かしなさいって言ったでしょう？　ほかの駒じゃないわ。"]},
+  ],
+  defaultFailureLines:["その手は違うわ。もう一度やり直しなさい。"],
+ },
 ];
+// 駒名の略号（棋譜用）。ルール側の名称とは独立しています。
+const LEARNING_PIECE_CODES={ema:"E",nanoka:"N",hanna:"H",hiro:"I",sherry:"S",margo:"M"};
+function learningMoveRecord(action,before){
+ const piece=action.category==="drop"?action.piece:before.board[action.from[0]][action.from[1]];
+ const sq=([r,c])=>String.fromCharCode(97+c)+String(6-r);
+ return {piece:piece?.type,side:before.turn,from:action.from?sq(action.from):null,to:sq(action.to),
+  notation:action.category==="drop"?`${LEARNING_PIECE_CODES[piece?.type]||"?"}@${sq(action.to)}`:`${sq(action.from)}${sq(action.to)}`,
+  fromRank:action.from?6-action.from[0]:null,toRank:6-action.to[0],
+  forward:Boolean(action.from&&action.to[0]===action.from[0]+(before.turn==="sente"?-1:1)&&action.to[1]===action.from[1]),
+  category:action.category,magic:action.magic||null};
+}
+function learningStepMatches(expected,actual){
+ if(typeof expected==="string")return expected===actual.notation;
+ return Object.entries(expected).every(([key,value])=>actual[key]===value);
+}
+function learningBranchMatches(branch,history){
+ if(branch.moves)return branch.moves.length<=history.length&&branch.moves.every((move,i)=>learningStepMatches(move,history[i]));
+ if(branch.when){const last=history[history.length-1];return Object.entries(branch.when).every(([key,value])=>key==="notPiece"?last.piece!==value:last[key]===value)}
+ return false;
+}
 function learningStartState(level){
  const base=makeInitialState();
  if(!level.setup)return base;
@@ -110,6 +145,9 @@ export default function App(){
   const [confirmLearningBack,setConfirmLearningBack]=useState(false);
   const [learningDialogue,setLearningDialogue]=useState(0);
   const [learningLevelIndex,setLearningLevelIndex]=useState(0);
+ const [learningHistory,setLearningHistory]=useState([]);
+ const [learningOutcome,setLearningOutcome]=useState(null);
+ const [learningChapterSelect,setLearningChapterSelect]=useState(false);
  const [humanSide,setHumanSide]=useState("sente");
  const opponentSide=humanSide==="sente"?"gote":"sente";
  const [timeline,setTimeline]=useState([initial]);
@@ -262,7 +300,29 @@ export default function App(){
   const generation=learningGeneration.current;
   await beginMotion(action,before);
   if(mode==="learning"&&generation!==learningGeneration.current)return;
-  setTimeline(x=>[...x,applyLegalAction(x[x.length-1],action)]);
+  if(mode==="learning"){
+   const record=learningMoveRecord(action,before);
+   const level=LEARNING_LEVELS[learningLevelIndex];
+   const history=[...learningHistory,record];
+   setLearningHistory(history);
+   const matching=level.correct||[];
+   const prefix=history.every((move,i)=>i<matching.length&&learningStepMatches(matching[i],move));
+   if(!prefix){
+    const branch=level.branches?.find(item=>learningBranchMatches(item,history));
+    setLearningOutcome({kind:"failure",lines:branch?.lines||level.defaultFailureLines||["もう一度挑戦して。"]});
+    setLearningDialogue(0);
+   }else if(history.length===matching.length){
+    setLearningOutcome({kind:"success",lines:level.successLines||["よくできたわ。"]});
+    setLearningDialogue(0);
+   }else{
+    // 複数手問題: 次の指定手番を待つ（相手側の手も問題に含められます）。
+    setLearningDialogue(level.lines.length-1);
+   }
+   const next=applyLegalAction(before,action);
+   const following=matching[history.length];
+   const nextSide=typeof following==="object"?following.side:null;
+   setTimeline(x=>[...x,nextSide&&nextSide!==next.turn?{...next,turn:nextSide}:next]);
+  }else setTimeline(x=>[...x,applyLegalAction(x[x.length-1],action)]);
  }
  function play(action){
   if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver||learningBoardLocked)return;
@@ -318,10 +378,11 @@ export default function App(){
   setMode("learning");setHumanSide("sente");setTimeline([learningStartState(LEARNING_LEVELS[0])]);
   setSelected(null);setHandType(null);setThinking(false);setResigned(false);
   setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);motionFxRef.current=null;
-  setLearningDialogue(0);setConfirmLearningBack(false);setStarted(true);
+  setLearningDialogue(0);setLearningHistory([]);setLearningOutcome(null);setLearningChapterSelect(false);setConfirmLearningBack(false);setStarted(true);
   backgroundMusic.current?.pause();
   backgroundMusic.current=new Audio("/audio/learning-bgm.mp3");
-  backgroundMusic.current.loop=true;backgroundMusic.current.volume=.3;
+  backgroundMusic.current.loop=true;backgroundMusic.current.volume=.45;
+  backgroundMusic.current.playbackRate=1; // ラーニングBGMは通常速度
   backgroundMusic.current.play().catch(()=>{});
  }
  function restoreLearningLevel(levelIndex=learningLevelIndex){
@@ -333,23 +394,32 @@ export default function App(){
   setSelected(null);setHandType(null);setPieceGuide(null);setThinking(false);
   setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);
   setMotionFx(null);motionFxRef.current=null;
+  setLearningHistory([]);setLearningOutcome(null);
  }
  function resetLearning(){
   restoreLearningLevel();setLearningDialogue(0);
  }
  function previousLearningPage(){
   if(learningDialogue<=0)return;
-  restoreLearningLevel();
+  // 説明ページへ戻るときは問題開始配置に戻す。結果の読み返し中は盤面を保持。
+  if(!learningOutcome)restoreLearningLevel();
   setLearningDialogue(n=>Math.max(0,n-1));
+ }
+ function advanceLearningChapter(){
+  const next=learningLevelIndex+1;
+  if(next>=LEARNING_LEVELS.length){setLearningChapterSelect(true);return;}
+  restoreLearningLevel(next);setLearningLevelIndex(next);setLearningDialogue(0);
  }
  function leaveLearning(){
   learningGeneration.current++;
   request.current++;worker.current?.postMessage({type:"reset"});
   backgroundMusic.current?.pause();backgroundMusic.current=null;
-  setConfirmLearningBack(false);setStarted(false);setMode("ai");
+  setConfirmLearningBack(false);setLearningChapterSelect(false);setStarted(false);setMode("ai");
  }
- const learningLines=LEARNING_LEVELS[learningLevelIndex].lines;
- const learningBoardLocked=mode==="learning"&&(learningDialogue!==learningLines.length-1||timeline.length>1);
+ const learningLevel=LEARNING_LEVELS[learningLevelIndex];
+ const learningLines=learningOutcome?.lines||learningLevel.lines;
+ const learningIsLast=learningDialogue===learningLines.length-1;
+ const learningBoardLocked=mode==="learning"&&(Boolean(learningOutcome)||learningDialogue!==learningLevel.lines.length-1||learningHistory.length>=learningLevel.correct.length);
  async function beginMotion(action,before){
   const moving=action.category==="drop"?action.piece:before.board[action.from[0]][action.from[1]];
   const captureAt=action.swap?null:action.captureAt??(before.board[action.to[0]][action.to[1]]?[...action.to]:null);
@@ -467,7 +537,8 @@ export default function App(){
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
-  {mode==="learning"&&<div className="learning-dialogue"><img src="/images/learning/nanoka.png" alt="黒部ナノカ" onError={e=>{e.currentTarget.style.visibility="hidden"}}/><div className="learning-dialogue__body"><strong>黒部ナノカ</strong><p>{learningLines[learningDialogue]}</p><div className="learning-dialogue__nav"><button type="button" disabled={learningDialogue===0} onClick={previousLearningPage}>◀</button><span>{learningDialogue+1} / {learningLines.length}</span><button type="button" disabled={learningDialogue===learningLines.length-1} onClick={()=>setLearningDialogue(n=>Math.min(learningLines.length-1,n+1))}>▶</button></div></div></div>}
+  {mode==="learning"&&<div className="learning-dialogue"><img src="/images/learning/nanoka.png" alt="黒部ナノカ" onError={e=>{e.currentTarget.style.visibility="hidden"}}/><div className="learning-dialogue__body"><strong>黒部ナノカ</strong><p>{learningLines[learningDialogue]}</p><div className="learning-dialogue__nav">{learningOutcome?.kind!=="failure"&&<button type="button" disabled={learningDialogue===0} onClick={previousLearningPage}>◀</button>}<span>{learningDialogue+1} / {learningLines.length}</span>{learningOutcome?.kind==="failure"?<button type="button" className="learning-next-chapter" onClick={resetLearning}>再挑戦</button>:learningIsLast&&learningOutcome?.kind==="success"?<button type="button" className="learning-next-chapter" onClick={advanceLearningChapter}>次の章</button>:<button type="button" disabled={learningIsLast} onClick={()=>setLearningDialogue(n=>Math.min(learningLines.length-1,n+1))}>▶</button>}</div></div></div>}
+  {mode==="learning"&&learningChapterSelect&&<div className="nickname-reset-overlay"><section className="nickname-reset-dialog" role="dialog" aria-modal="true" aria-label="章選択"><h2>章選択</h2><p>次の章は準備中です。</p><div className="nickname-reset-actions"><button type="button" onClick={()=>setLearningChapterSelect(false)}>閉じる</button></div></section></div>}
   {mode==="learning"&&confirmLearningBack&&<div className="nickname-reset-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)setConfirmLearningBack(false)}}><section className="nickname-reset-dialog" role="dialog" aria-modal="true" aria-labelledby="learning-back-title"><h2 id="learning-back-title">タイトルに戻りますか？</h2><div className="nickname-reset-actions"><button type="button" className="nickname-reset-yes" onClick={leaveLearning}>はい</button><button type="button" data-cancel onClick={()=>setConfirmLearningBack(false)}>キャンセル</button></div></section></div>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
   {showHowTo&&<HowToPlayDialog onClose={()=>setShowHowTo(false)}/>} 
