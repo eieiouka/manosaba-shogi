@@ -10,6 +10,10 @@ import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardAction
 import "./result-invite.css";
 import "./online/nickname-reset.css";
 import {stateKey} from "./game/aiEngine.js";
+import {LEARNING_LEVELS,learningMoveRecord,learningStartState,evaluateLearningHistory} from "./learning/levels.js";
+import {useLearningState} from "./learning/useLearningState.js";
+import {LearningChapterHeading,LearningDialogue,LearningChapterSelect,LearningBackConfirm} from "./learning/LearningUI.jsx";
+import "./learning/learning.css";
 
 const randomSide=()=>Math.random()<.5?"sente":"gote";
 const HAND_ORDER=["sherry","hanna","hiro","nanoka","margo"];
@@ -26,63 +30,6 @@ const PIECE_GUIDES={
  sherry:{move:"前に1マス移動できますが、駒を取れません。駒を取る時だけは、斜め前に1マス移動できます。魔女化後は8方向1マスと前2マスへ移動できます。",magicName:"全力突進",magic:"前方へ2マス移動できます。途中・着地点に駒がある場合は進めません。"},
  margo:{move:"前・斜め前に1マス、魔女化後は8方向に1マス移動できます。",magicName:"跳躍暗殺",magic:"着地点が空いていれば、横・斜め後ろ・後ろ側の敵を飛び越え、取ることができます。"},
 };
-// 各レベルの開始局面。board は6×6、hands は両陣営の持ち駒です。
-// setup を省略したレベルは通常の初期配置を使用します。
-// ★ ナノカのセリフを編集する場所：各レベルの lines: [ ... ] を書き換えてください。
-// ★ セリフ・正解棋譜・分岐はここで編集します。
-// 棋譜表記: a1a2 (移動)、N@a2 (駒打ち)。a～f、1～6 は盤面の座標です。
-// moves は複数手を並べられます。各分岐は先頭から一致した棋譜で判定します。
-const LEARNING_LEVELS = [
- {id:"nanoka-1", title:"ナノカの動かし方①", chapter:"第1章　1節", setup:null,
-  lines:[
-   "黒部ナノカよ。まずは、凄くて偉くて天才な私の動かし方を学ぶのよ。",
-   "駒を長押しすると、移動範囲と特殊能力を確認できるわ。",
-   "私は最強の駒だから、序盤から前に出すのがセオリーよ。",
-   "実際に操作して理解しなさい。私を二段目（前）に出して。",
-  ],
-  // 1手目はナノカを自陣1段目から前へ1マス。後で棋譜配列にも置換可能。
-  correct:[{piece:"nanoka",fromRank:1,toRank:2,forward:true}],
-  successLines:["そう、それでいいのよ。私を前に出せば、攻撃の準備ができるわ。", "これで基本の動きは覚えたわね。次の章へ進みなさい。"],
-  // moves:["a1a2"] のように棋譜を指定すると特定手順だけに反応します。
-  branches:[
-   {id:"nanoka-side",when:{piece:"nanoka"},lines:["そっちじゃないわ。私は一段前に出してほしいのよ。"]},
-   {id:"other-piece",when:{notPiece:"nanoka"},lines:["私を動かしなさいって言ったでしょう？　ほかの駒じゃないわ。"]},
-  ],
-  defaultFailureLines:["その手は違うわ。もう一度やり直しなさい。"],
- },
-];
-// 駒名の略号（棋譜用）。ルール側の名称とは独立しています。
-const LEARNING_PIECE_CODES={ema:"E",nanoka:"N",hanna:"H",hiro:"I",sherry:"S",margo:"M"};
-function learningMoveRecord(action,before){
- const piece=action.category==="drop"?action.piece:before.board[action.from[0]][action.from[1]];
- const sq=([r,c])=>String.fromCharCode(97+c)+String(6-r);
- return {piece:piece?.type,side:before.turn,from:action.from?sq(action.from):null,to:sq(action.to),
-  notation:action.category==="drop"?`${LEARNING_PIECE_CODES[piece?.type]||"?"}@${sq(action.to)}`:`${sq(action.from)}${sq(action.to)}`,
-  fromRank:action.from?6-action.from[0]:null,toRank:6-action.to[0],
-  forward:Boolean(action.from&&action.to[0]===action.from[0]+(before.turn==="sente"?-1:1)&&action.to[1]===action.from[1]),
-  category:action.category,magic:action.magic||null};
-}
-function learningStepMatches(expected,actual){
- if(typeof expected==="string")return expected===actual.notation;
- return Object.entries(expected).every(([key,value])=>actual[key]===value);
-}
-function learningBranchMatches(branch,history){
- if(branch.moves)return branch.moves.length<=history.length&&branch.moves.every((move,i)=>learningStepMatches(move,history[i]));
- if(branch.when){const last=history[history.length-1];return Object.entries(branch.when).every(([key,value])=>key==="notPiece"?last.piece!==value:last[key]===value)}
- return false;
-}
-function learningStartState(level){
- const base=makeInitialState();
- if(!level.setup)return base;
- // setup.board は6行×6列の配列。空マスは null。
- // 駒は {type:"nanoka",side:"sente",promoted:false,id:"..."} 形式。
- const setup=level.setup;
- if(setup.board&&(!Array.isArray(setup.board)||setup.board.length!==6||setup.board.some(row=>!Array.isArray(row)||row.length!==6)))throw new Error("学習盤面は6×6で指定してください");
- return {...base,
-  ...(setup.board?{board:setup.board.map(row=>row.map(piece=>piece?{...piece}:null))}:{}),
-  ...(setup.hands?{hands:{sente:(setup.hands.sente||[]).map(p=>({...p})),gote:(setup.hands.gote||[]).map(p=>({...p}))}}:{}),
-  ...(setup.turn?{turn:setup.turn}:{})};
-}
 const MOBILE_LAYOUT_QUERY="(max-width: 760px) and (hover: none) and (pointer: coarse)";
 const imageFor=p=>`/images/pieces/${p.type}_${p.promoted?"red":"black"}.png`;
 
@@ -142,12 +89,7 @@ export default function App(){
  const initial=useMemo(()=>makeInitialState(),[]);
  const [started,setStarted]=useState(false);
  const [mode,setMode]=useState("ai");
-  const [confirmLearningBack,setConfirmLearningBack]=useState(false);
-  const [learningDialogue,setLearningDialogue]=useState(0);
-  const [learningLevelIndex,setLearningLevelIndex]=useState(0);
- const [learningHistory,setLearningHistory]=useState([]);
- const [learningOutcome,setLearningOutcome]=useState(null);
- const [learningChapterSelect,setLearningChapterSelect]=useState(false);
+  const {confirmLearningBack,setConfirmLearningBack,learningDialogue,setLearningDialogue,learningLevelIndex,setLearningLevelIndex,learningHistory,setLearningHistory,learningOutcome,setLearningOutcome,learningChapterSelect,setLearningChapterSelect,learningGeneration}=useLearningState();
  const [humanSide,setHumanSide]=useState("sente");
  const opponentSide=humanSide==="sente"?"gote":"sente";
  const [timeline,setTimeline]=useState([initial]);
@@ -167,7 +109,8 @@ export default function App(){
  const [mobileLayout,setMobileLayout]=useState(()=>typeof window!=="undefined"&&window.matchMedia(MOBILE_LAYOUT_QUERY).matches);
  const worker=useRef(null),request=useRef(0),motionFxRef=useRef(null),motionSequence=useRef(0),backgroundMusic=useRef(null);
  const guideTimer=useRef(null),guideTriggered=useRef(false);
- const learningGeneration=useRef(0);
+ const [learningAutoMoving,setLearningAutoMoving]=useState(false);
+ const learningAutoMovingRef=useRef(false);
  const state=timeline[timeline.length-1];
  const online=useOnline(data=>{
   if(data.action)beginMotion(data.action,state);
@@ -192,11 +135,24 @@ export default function App(){
  const seen=useMemo(()=>timeline.map(stateKey),[timeline]);
  const legal=useMemo(()=>gameOver?[]:generateAllLegalActions(state),[state,gameOver]);
  const selectable=useMemo(()=>legal.filter(a=>a.category==="drop"?handType!==null&&a.piece.type===handType:selected&&a.from?.[0]===selected[0]&&a.from?.[1]===selected[1]),[legal,selected,handType]);
+ // 教材のページに対応する駒の移動範囲を、盤面操作を解禁せずに表示する。
+ const learningPageGuide=mode==="learning"&&!learningOutcome
+  ?LEARNING_LEVELS[learningLevelIndex]?.pageGuides?.[learningDialogue]:null;
+ const learningGuidePiece=useMemo(()=>{
+  if(!learningPageGuide)return null;
+  const match=/^([a-f])([1-6])$/.exec(learningPageGuide.square||"");
+  if(!match)return null;
+  const row=6-Number(match[2]),col=match[1].charCodeAt(0)-97;
+  const piece=state.board[row]?.[col];
+  if(!piece||piece.side!==learningPageGuide.side||piece.type!==learningPageGuide.type)return null;
+  return {row,col,piece};
+ },[learningPageGuide,state]);
+ const activeGuide=pieceGuide?.row!=null&&pieceGuide?.col!=null?pieceGuide:learningGuidePiece;
  const guideActions=useMemo(()=>{
-  if(!pieceGuide||pieceGuide.row==null||pieceGuide.col==null)return[];
-  const guideState=state.turn===pieceGuide.piece.side?state:{...state,turn:pieceGuide.piece.side};
-  return generateLegalBoardActions(guideState,pieceGuide.row,pieceGuide.col);
- },[state,pieceGuide]);
+  if(!activeGuide)return[];
+  const guideState=state.turn===activeGuide.piece.side?state:{...state,turn:activeGuide.piece.side};
+  return generateLegalBoardActions(guideState,activeGuide.row,activeGuide.col);
+ },[state,activeGuide]);
  const guideTargets=useMemo(()=>{
   const targets=new Map();
   for(const action of guideActions){
@@ -204,9 +160,36 @@ export default function App(){
    if(action.category==="magic"||action.longForward)targets.set(key,"magic");
    else if(!targets.has(key))targets.set(key,"normal");
   }
+  // マーゴ共通ガイド：通常移動は黄色、周囲の空マスは赤。
+  // 敵駒のあるマスは跳躍暗殺が合法な場合のみ赤。味方駒は表示しない。
+  if(activeGuide?.piece.type==="margo"){
+   targets.clear();
+   const {row,col,piece}=activeGuide;
+   for(const dr of [-1,0,1])for(const dc of [-1,0,1]){
+    if(dr===0&&dc===0)continue;
+    const r=row+dr,c=col+dc;
+    if(r<0||r>=6||c<0||c>=6)continue;
+    const occupant=state.board[r][c];
+    if(!occupant)targets.set(`${r},${c}`,"magic");
+   }
+   // 合法な跳躍暗殺で捕獲される敵駒のみ赤く示す。
+   for(const action of guideActions){
+    if(action.category!=="magic"&&!action.magic)continue;
+    const target=action.captureAt??action.to;
+    if(!target)continue;
+    const [r,c]=target;
+    if(Math.abs(r-row)>1||Math.abs(c-col)>1)continue;
+    if(state.board[r][c]?.side!==piece.side)targets.set(`${r},${c}`,"magic");
+   }
+   // 通常移動が可能なマスは常に黄色を優先する。
+   for(const action of guideActions){
+    if(action.category==="magic"||action.magic)continue;
+    targets.set(`${action.to[0]},${action.to[1]}`,"normal");
+   }
+  }
   // Show Nanoka's shooting range even when no enemy occupies the target.
-  if(pieceGuide?.piece.type==="nanoka"&&pieceGuide.row!=null&&pieceGuide.col!=null){
-   const {row,col,piece}=pieceGuide;
+  if(activeGuide?.piece.type==="nanoka"){
+   const {row,col,piece}=activeGuide;
    const forward=piece.side==="sente"?-1:1;
    for(const dc of [-2,0,2]){
     const targetRow=row+2*forward,targetCol=col+dc;
@@ -217,7 +200,7 @@ export default function App(){
    }
   }
   return targets;
- },[guideActions,pieceGuide,state]);
+ },[guideActions,activeGuide,state]);
 
  useEffect(()=>{worker.current=new Worker(new URL("./game/ai.worker.js",import.meta.url),{type:"module"});return()=>worker.current?.terminate()},[]);
  useEffect(()=>()=>{backgroundMusic.current?.pause();backgroundMusic.current=null},[]);
@@ -305,24 +288,69 @@ export default function App(){
    const level=LEARNING_LEVELS[learningLevelIndex];
    const history=[...learningHistory,record];
    setLearningHistory(history);
-   const matching=level.correct||[];
-   const prefix=history.every((move,i)=>i<matching.length&&learningStepMatches(matching[i],move));
-   if(!prefix){
-    const branch=level.branches?.find(item=>learningBranchMatches(item,history));
-    setLearningOutcome({kind:"failure",lines:branch?.lines||level.defaultFailureLines||["もう一度挑戦して。"]});
-    setLearningDialogue(0);
-   }else if(history.length===matching.length){
-    setLearningOutcome({kind:"success",lines:level.successLines||["よくできたわ。"]});
-    setLearningDialogue(0);
-   }else{
-    // 複数手問題: 次の指定手番を待つ（相手側の手も問題に含められます）。
-    setLearningDialogue(level.lines.length-1);
-   }
    const next=applyLegalAction(before,action);
-   const following=matching[history.length];
-   const nextSide=typeof following==="object"?following.side:null;
-   setTimeline(x=>[...x,nextSide&&nextSide!==next.turn?{...next,turn:nextSide}:next]);
+   setTimeline(x=>[...x,next]);
+   if(level.id==="nanoka-2"){
+    if(history.length===1 && record.notation==="b2c2"){
+     setLearningOutcome({kind:"interlude",lines:level.interludeLines});
+     setLearningDialogue(0);
+     return;
+    }
+    if(history.length===3){
+     const captured=before.board[2]?.[4]; // e4: row 2, col 4
+     const correct=record.piece==="nanoka"&&record.from==="c2"&&record.to==="e4"&&record.magic==="銃撃"&&captured?.type==="hanna"&&captured.side==="gote";
+     setLearningOutcome(correct?{kind:"success",lines:level.successLines}:{kind:"failure",lines:level.finalMoveFailureLines||level.defaultFailureLines||["もう一度挑戦して。"]});
+     setLearningDialogue(0);
+     return;
+    }
+   }
+   const outcome=evaluateLearningHistory(level,history);
+   if(outcome){setLearningOutcome(outcome);setLearningDialogue(0)}
+   else setLearningDialogue(level.lines.length-1);
   }else setTimeline(x=>[...x,applyLegalAction(x[x.length-1],action)]);
+ }
+ // 中継2/3に到達したらヒロを一度だけ自動移動する。
+ // アニメーション完了までセリフ送りをロックし、連打による状態競合を防ぐ。
+ const autoHiroPending=useRef(false);
+ useEffect(()=>{
+  if(mode!=="learning"||LEARNING_LEVELS[learningLevelIndex].id!=="nanoka-2"||learningOutcome?.kind!=="interlude"||learningDialogue!==1||learningHistory.length!==1||autoHiroPending.current)return;
+  autoHiroPending.current=true;
+  learningAutoMovingRef.current=true;
+  setLearningAutoMoving(true);
+  const generation=learningGeneration.current;
+  let cancelled=false;
+  const timer=setTimeout(()=>{
+   if(cancelled||generation!==learningGeneration.current)return;
+   const opponent={...state,turn:"gote"};
+   const action=generateAllLegalActions(opponent).find(a=>a.from?.[0]===1&&a.from?.[1]===3&&a.to?.[0]===2&&a.to?.[1]===3&&a.category!=="magic");
+   if(!action){
+    setLearningOutcome({kind:"failure",lines:["ヒロをd5からd4へ動かせないわ。盤面の配置を確認してちょうだい。"]});
+    setLearningDialogue(0);
+    learningAutoMovingRef.current=false;setLearningAutoMoving(false);autoHiroPending.current=false;
+    return;
+   }
+   // 移動先の駒を描画するタイミングでアニメーションを開始する。
+   // 先に演出だけ開始すると、移動先の駒が存在せずアニメーションが見えない。
+   beginMotion(action,opponent);
+   setTimeline(x=>[...x,applyLegalAction(opponent,action)]);
+   // 演出完了まではセリフをロック。棋譜の確定は演出後に行う。
+   setTimeout(()=>{
+    if(cancelled||generation!==learningGeneration.current)return;
+    setLearningHistory(x=>[...x,learningMoveRecord(action,opponent)]);
+    setSelected(null);setHandType(null);setPieceGuide(null);
+    learningAutoMovingRef.current=false;setLearningAutoMoving(false);autoHiroPending.current=false;
+   },570);
+  },250);
+  return()=>{cancelled=true;clearTimeout(timer);};
+ // 依存するのはページと棋譜の段階のみ。盤面のアニメーション更新ではキャンセルしない。
+ },[mode,learningLevelIndex,learningOutcome?.kind,learningDialogue,learningHistory.length]);
+ function advanceLearningDialogue(){
+  if(learningAutoMovingRef.current)return;
+  // 2/3を開く操作と同時にロックし、次のクリックが先行するのを防ぐ。
+  if(mode==="learning"&&learningLevel.id==="nanoka-2"&&learningOutcome?.kind==="interlude"&&learningDialogue===0&&learningHistory.length===1){
+   learningAutoMovingRef.current=true;setLearningAutoMoving(true);
+  }
+  setLearningDialogue(n=>Math.min(learningLines.length-1,n+1));
  }
  function play(action){
   if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver||learningBoardLocked)return;
@@ -386,6 +414,7 @@ export default function App(){
   backgroundMusic.current.play().catch(()=>{});
  }
  function restoreLearningLevel(levelIndex=learningLevelIndex){
+  learningAutoMovingRef.current=false;setLearningAutoMoving(false);autoHiroPending.current=false;
   learningGeneration.current++;
   request.current++;worker.current?.postMessage({type:"reset"});
   clearTimeout(guideTimer.current);guideTriggered.current=false;
@@ -397,18 +426,43 @@ export default function App(){
   setLearningHistory([]);setLearningOutcome(null);
  }
  function resetLearning(){
-  restoreLearningLevel();setLearningDialogue(0);
+  // 再挑戦は現在のレベルの開始配置に戻し、操作指示の最終ページから再開する。
+  restoreLearningLevel();
+  setLearningDialogue(Math.max(0,LEARNING_LEVELS[learningLevelIndex].lines.length-1));
  }
  function previousLearningPage(){
-  if(learningDialogue<=0)return;
-  // 説明ページへ戻るときは問題開始配置に戻す。結果の読み返し中は盤面を保持。
+  if(learningAutoMovingRef.current||learningDialogue<=0)return;
+  // 中継ページを戻したら、戻り先の時点まで局面・棋譜を巻き戻す。
+  // 2/3 -> 1/3 ではヒロの自動着手だけを取り消し、ナノカの初手は残す。
+  if(mode==="learning"&&learningOutcome?.kind==="interlude"&&learningLevel.id==="nanoka-2"){
+   learningGeneration.current++;
+   autoHiroPending.current=false;
+   clearTimeout(guideTimer.current);guideTriggered.current=false;
+   motionSequence.current++;
+   motionFxRef.current=null;setMotionFx(null);
+   setSelected(null);setHandType(null);setPieceGuide(null);
+   setLearningAutoMoving(false);learningAutoMovingRef.current=false;
+   setTimeline(t=>t.slice(0,2));
+   setLearningHistory(h=>h.slice(0,1));
+   setLearningDialogue(n=>n-1);
+   return;
+  }
+  // 通常の説明ページは開始局面に戻す。結果の読み返しは盤面を維持。
   if(!learningOutcome)restoreLearningLevel();
   setLearningDialogue(n=>Math.max(0,n-1));
+ }
+ function chooseLearningLevel(index){
+  if(index<0||index>=LEARNING_LEVELS.length)return;
+  restoreLearningLevel(index);
+  setLearningLevelIndex(index);
+  setLearningDialogue(0);
+  setLearningChapterSelect(false);
+  setConfirmLearningBack(false);
  }
  function advanceLearningChapter(){
   const next=learningLevelIndex+1;
   if(next>=LEARNING_LEVELS.length){setLearningChapterSelect(true);return;}
-  restoreLearningLevel(next);setLearningLevelIndex(next);setLearningDialogue(0);
+  chooseLearningLevel(next);
  }
  function leaveLearning(){
   learningGeneration.current++;
@@ -419,7 +473,7 @@ export default function App(){
  const learningLevel=LEARNING_LEVELS[learningLevelIndex];
  const learningLines=learningOutcome?.lines||learningLevel.lines;
  const learningIsLast=learningDialogue===learningLines.length-1;
- const learningBoardLocked=mode==="learning"&&(Boolean(learningOutcome)||learningDialogue!==learningLevel.lines.length-1||learningHistory.length>=learningLevel.correct.length);
+ const learningBoardLocked=mode==="learning"&&(learningAutoMoving||learningOutcome?.kind==="failure"||learningOutcome?.kind==="success"||(learningOutcome?.kind==="interlude" ? !(learningDialogue===learningLines.length-1&&learningHistory.length===2) : learningDialogue!==learningLevel.lines.length-1||(learningLevel.id==="nanoka-2"?learningHistory.length!==0:learningHistory.length >= (learningLevel.correct.length || 1))));
  async function beginMotion(action,before){
   const moving=action.category==="drop"?action.piece:before.board[action.from[0]][action.from[1]];
   const captureAt=action.swap?null:action.captureAt??(before.board[action.to[0]][action.to[1]]?[...action.to]:null);
@@ -523,8 +577,8 @@ export default function App(){
  return <div className={`app-shell ${mode==="learning"?"app-shell--learning":""}`}>
   <header className="topbar">
    {mode==="learning"?<button className="how-to-button learning-header-guide" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>:<div className="branding"><div className="eyebrow">MANOSABA SHOGI</div><h1>魔法少女ノ魔法将棋</h1></div>}
-   {mode==="learning"&&<div className="learning-chapter-heading" aria-label={`${LEARNING_LEVELS[learningLevelIndex].chapter} ${LEARNING_LEVELS[learningLevelIndex].title}`}><span>{LEARNING_LEVELS[learningLevelIndex].chapter}</span><strong>{LEARNING_LEVELS[learningLevelIndex].title}</strong></div>}
-   <div className="match-actions">{mode==="learning"?<><button className="resign-button" onClick={resetLearning}>再挑戦</button><button onClick={()=>setConfirmLearningBack(true)}>章選択</button></>:<><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></>}</div>
+   {mode==="learning"&&<LearningChapterHeading level={learningLevel}/>}
+   <div className="match-actions">{mode==="learning"?<><button className="resign-button" onClick={resetLearning}>再挑戦</button><button onClick={()=>setLearningChapterSelect(true)}>章選択</button></>:<><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></>}</div>
   </header>
   {mode==="online"&&<div className="online-bar" role="status">
    <div className="online-bar__opponent"><span>VS {online.match?.nicknames?.[opponentSide]||"相手"}</span>{online.match?.profiles?.[opponentSide]?.rank&&<span className="opponent-rank-badge" aria-label={`相手の段位 ${online.match.profiles[opponentSide].rank}`}><RankLabel rank={online.match.profiles[opponentSide].rank}/></span>}</div>
@@ -533,13 +587,13 @@ export default function App(){
   </div>}
   <main className="game-stage">
    <Hand className="hand--opponent" title="相手の持ち駒" pieces={visibleHand(opponentSide)} disabled activeType={null} onPick={()=>{}} perspective={humanSide} reverse onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
-   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${pieceGuide?.row===r&&pieceGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${showCpuInvite?"result-overlay--cpu-invite":""} ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div>{showCpuInvite&&<><p className="result-overlay__invite">強いですね！対人戦もやってみませんか？</p><button className="result-overlay__again result-overlay__online" disabled={online.status==="connecting"||online.status==="queued"} onClick={()=>{setStarted(false);online.queue()}}>対人戦</button></>}<div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{backgroundMusic.current?.pause();setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
+   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${activeGuide?.row===r&&activeGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${showCpuInvite?"result-overlay--cpu-invite":""} ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div>{showCpuInvite&&<><p className="result-overlay__invite">強いですね！対人戦もやってみませんか？</p><button className="result-overlay__again result-overlay__online" disabled={online.status==="connecting"||online.status==="queued"} onClick={()=>{setStarted(false);online.queue()}}>対人戦</button></>}<div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{backgroundMusic.current?.pause();setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
-  {mode==="learning"&&<div className="learning-dialogue"><img src="/images/learning/nanoka.png" alt="黒部ナノカ" onError={e=>{e.currentTarget.style.visibility="hidden"}}/><div className="learning-dialogue__body"><strong>黒部ナノカ</strong><p>{learningLines[learningDialogue]}</p><div className="learning-dialogue__nav">{learningOutcome?.kind!=="failure"&&<button type="button" disabled={learningDialogue===0} onClick={previousLearningPage}>◀</button>}<span>{learningDialogue+1} / {learningLines.length}</span>{learningOutcome?.kind==="failure"?<button type="button" className="learning-next-chapter" onClick={resetLearning}>再挑戦</button>:learningIsLast&&learningOutcome?.kind==="success"?<button type="button" className="learning-next-chapter" onClick={advanceLearningChapter}>次の章</button>:<button type="button" disabled={learningIsLast} onClick={()=>setLearningDialogue(n=>Math.min(learningLines.length-1,n+1))}>▶</button>}</div></div></div>}
-  {mode==="learning"&&learningChapterSelect&&<div className="nickname-reset-overlay"><section className="nickname-reset-dialog" role="dialog" aria-modal="true" aria-label="章選択"><h2>章選択</h2><p>次の章は準備中です。</p><div className="nickname-reset-actions"><button type="button" onClick={()=>setLearningChapterSelect(false)}>閉じる</button></div></section></div>}
-  {mode==="learning"&&confirmLearningBack&&<div className="nickname-reset-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)setConfirmLearningBack(false)}}><section className="nickname-reset-dialog" role="dialog" aria-modal="true" aria-labelledby="learning-back-title"><h2 id="learning-back-title">タイトルに戻りますか？</h2><div className="nickname-reset-actions"><button type="button" className="nickname-reset-yes" onClick={leaveLearning}>はい</button><button type="button" data-cancel onClick={()=>setConfirmLearningBack(false)}>キャンセル</button></div></section></div>}
+  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} onRetry={resetLearning} onNextChapter={advanceLearningChapter}/>}
+  {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={chooseLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
+  {mode==="learning"&&confirmLearningBack&&<LearningBackConfirm onConfirm={leaveLearning} onCancel={()=>setConfirmLearningBack(false)}/>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
   {showHowTo&&<HowToPlayDialog onClose={()=>setShowHowTo(false)}/>} 
   {difficultyPrompt&&<DifficultyDialog onChoose={startNewMatch} onCancel={()=>setDifficultyPrompt(null)}/>} 
