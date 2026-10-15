@@ -214,3 +214,33 @@
 .learning-chapter-item strong {font-size:clamp(14px,3.7vw,17px);}
 .learning-chapter-close {margin-top:6px;}
 .learning-chapter-list button:focus-visible {outline:3px solid white;outline-offset:2px;}
+
+/* V50: keep the V48 board and hands dimensions unchanged.
+   Make only the desktop dialogue follow the stage width. */
+@media (min-width: 761px) {
+  .app-shell--learning .learning-dialogue {
+    width: calc(var(--board-size) + 2 * var(--hand-width) + 2 * var(--stage-gap));
+    max-width: calc(100vw - 40px);
+    gap: clamp(6px, 1.15vw, 12px);
+  }
+  .app-shell--learning .learning-dialogue > img {
+    width: clamp(65px, 12vw, 140px);
+    height: auto;
+    aspect-ratio: 1 / 1;
+    flex-shrink: 0;
+  }
+  .app-shell--learning .learning-dialogue__body {
+    min-width: 0;
+    padding: clamp(8px, 1.15vw, 12px) clamp(10px, 1.5vw, 16px);
+    font-size: clamp(12px, 1.4vw, 16px);
+  }
+  .app-shell--learning .learning-dialogue__nav { gap: clamp(6px, 1.3vw, 14px); }
+  .app-shell--learning .learning-dialogue__nav button {
+    font-size: inherit;
+    padding: clamp(4px, .6vw, 6px) clamp(8px, 1.3vw, 14px);
+  }
+}
+/* Requested mobile top padding only; do not change mobile board/dialogue sizes. */
+@media (max-width:760px) and (hover:none) and (pointer:coarse) {
+  .app-shell--learning { padding-top: 3px; }
+}

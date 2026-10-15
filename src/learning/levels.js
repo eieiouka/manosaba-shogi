@@ -76,7 +76,7 @@ export const LEARNING_LEVELS = [
   ],
   // 中継後、ナノカの遠方狙撃を間違えたときのセリフ（App.jsxに直書きしない）
   finalMoveFailureLines:["取れる駒を取らないなんて…。頭が悪いわ、まるで桜羽エマね。"],
-  defaultFailureLines:["私の知らない手を指さないでちょうだい。"],
+  defaultFailureLines:["その手では生け捕りできないわ。最初からやり直しなさい。"],
  }
 
 ];
