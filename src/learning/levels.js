@@ -18,6 +18,22 @@ export const LEARNING_LEVELS = [
    "私は最強の駒だから、序盤から前に出すのがセオリーよ。",
    "実際に操作して理解しなさい。私を二段目（前）に出して。",
   ],
+
+    // 第1章1節：3ページ目にナノカの利きを自動表示
+  pageGuides: {
+    2: {
+      side: "sente",
+      type: "nanoka",
+      square: "a1",
+    },
+
+    3: {
+      side: "sente",
+      type: "nanoka",
+      square: "a1",
+    },
+  },
+
   // 1手目はナノカを自陣1段目から前へ1マス。後で棋譜配列にも置換可能。
   correct:[{piece:"nanoka",fromRank:1,toRank:2,forward:true}],
   successLines:["正解よ。三段目まで出すと狙われやすくなるから、二段目に出したら横に動かして使うわ。", "これで基本の動きは覚えたわね。次の章へ進みなさい。"],
