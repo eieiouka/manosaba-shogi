@@ -3,6 +3,7 @@ import "./App.css";
 import "./online/online.css";
 import {useAdminActivity} from "./online/useAdminActivity.js";
 import {useCpuPresence} from "./online/useCpuPresence.js";
+import {useLearningPresence} from "./online/useLearningPresence.js";
 import {useOnline} from "./online/useOnline.js";
 import NicknameReset from "./online/NicknameReset.jsx";
 import RankLabel from "./online/RankLabel.jsx";
@@ -131,6 +132,7 @@ export default function App(){
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
  useCpuPresence(started&&mode==="ai"&&!gameOver);
+ useLearningPresence(started&&mode==="learning");
  useAdminActivity(started&&!gameOver);
  const seen=useMemo(()=>timeline.map(stateKey),[timeline]);
  const legal=useMemo(()=>gameOver?[]:generateAllLegalActions(state),[state,gameOver]);
@@ -566,7 +568,7 @@ export default function App(){
   <div className="title-screen__shade" aria-hidden="true"/>
  <h2 className="title-screen__logo"><span style={{display:"block",fontSize:"50%",lineHeight:1.5}}>【非公式作品】<br />計画性のないナノカちゃん作</span>魔法少女ノ魔法将棋</h2>
  <div className="title-screen__actions">
-   <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>AI対戦</button><button className="title-screen__start title-screen__learning" onClick={startLearning}>ラーニング</button></div>
+   <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>CPU戦</button><button className="title-screen__start title-screen__learning" onClick={startLearning}>対戦のコツ</button></div>
    <button className="title-screen__start" onClick={()=>online.queue()} disabled={online.status==="connecting"||online.status==="queued"}>オンライン対戦</button>
    <a className="title-screen__shop" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a>
   </div>
