@@ -14,6 +14,7 @@ import "./online/nickname-reset.css";
 import {stateKey} from "./game/aiEngine.js";
 import {LEARNING_LEVELS,learningMoveRecord,learningStartState,evaluateLearningHistory} from "./learning/levels.js";
 import {useLearningState} from "./learning/useLearningState.js";
+import {scriptedStep,scriptedLines,scriptedPlayerMatches,scriptedAutoAction,scriptedAutoMovePage,scriptedFailureLines,scriptedDisplayStep,sceneAutoAction,scenePlayerMatches,scriptedFailureBranch} from "./learning/learningCore.js";
 import {LearningChapterHeading,LearningDialogue,LearningChapterSelect,LearningBackConfirm} from "./learning/LearningUI.jsx";
 import "./learning/learning.css";
 
@@ -112,6 +113,9 @@ export default function App(){
  const worker=useRef(null),request=useRef(0),motionFxRef=useRef(null),motionSequence=useRef(0),backgroundMusic=useRef(null);
  const guideTimer=useRef(null),guideTriggered=useRef(false);
  const [learningAutoMoving,setLearningAutoMoving]=useState(false);
+ const [sceneIndex,setSceneIndex]=useState(0),[sceneAutoDone,setSceneAutoDone]=useState(false);
+ const sceneBusy=useRef(false),sceneTimers=useRef([]),sceneSnapshots=useRef([]),scenePlayerSnapshots=useRef([]);
+ const clearScene=()=>{sceneTimers.current.forEach(clearTimeout);sceneTimers.current=[];sceneBusy.current=false;learningAutoMovingRef.current=false;setLearningAutoMoving(false);};
  const learningAutoMovingRef=useRef(false);
  const state=timeline[timeline.length-1];
  const online=useOnline(data=>{
@@ -139,8 +143,20 @@ export default function App(){
  const legal=useMemo(()=>gameOver?[]:generateAllLegalActions(state),[state,gameOver]);
  const selectable=useMemo(()=>legal.filter(a=>a.category==="drop"?handType!==null&&a.piece.type===handType:selected&&a.from?.[0]===selected[0]&&a.from?.[1]===selected[1]),[legal,selected,handType]);
  // 教材のページに対応する駒の移動範囲を、盤面操作を解禁せずに表示する。
- const learningPageGuide=mode==="learning"&&!learningOutcome
-  ?LEARNING_LEVELS[learningLevelIndex]?.pageGuides?.[learningDialogue]:null;
+ // 教材データの pageGuides はセリフページと同じ順序の配列。
+ // [] は表示なし。旧教材の {0: {...}} 形式も引き続き使用可能。
+ const learningPageGuide=(()=>{
+  if(mode!=="learning"||learningOutcome?.kind==="success")return null;
+  const level=LEARNING_LEVELS[learningLevelIndex];
+  const step=level.scenes?level.scenes[sceneIndex]:(level.steps?scriptedDisplayStep(level,learningHistory):null);
+  const guidePages=learningOutcome?.kind==="failure"
+   ? (learningOutcome.pageGuides??[])
+   : learningOutcome?.kind==="interlude"
+   ?(level.interludePageGuides??[])
+   :(level.scenes?step?.pageGuides:(step?.lines == null ? level.pageGuides : (step?.pageGuides ?? level.pageGuides)));
+  const entry=guidePages?.[learningDialogue];
+  return Array.isArray(entry)?(entry[0]??null):(entry??null);
+ })();
  const learningGuidePiece=useMemo(()=>{
   if(!learningPageGuide)return null;
   const match=/^([a-f])([1-6])$/.exec(learningPageGuide.square||"");
@@ -307,6 +323,27 @@ export default function App(){
      return;
     }
    }
+   if(level.scenes){
+    const scene=level.scenes[sceneIndex];
+    scenePlayerSnapshots.current[sceneIndex]={t:timeline.length,h:learningHistory.length};
+    if(!scenePlayerMatches(scene,record)){
+     const branch=scriptedFailureBranch(scene,record);
+     setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,scene,record),pageGuides:branch?.pageGuides??[]});
+     setLearningDialogue(0);
+    }
+    else{sceneSnapshots.current[sceneIndex+1]={t:timeline.length+1,h:history.length};setSceneIndex(i=>i+1);setSceneAutoDone(false);setLearningDialogue(0)}
+    return;
+   }
+   if(level.steps){
+    const step=scriptedStep(level,learningHistory);
+    if(!scriptedPlayerMatches(step,record)){
+     setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,step,record)});
+     setLearningDialogue(0);
+    }else if(history.length===level.steps.length){
+     setLearningOutcome({kind:"success",lines:level.successLines});setLearningDialogue(0);
+    }else{setLearningDialogue(0);}
+    return;
+   }
    const outcome=evaluateLearningHistory(level,history);
    if(outcome){setLearningOutcome(outcome);setLearningDialogue(0)}
    else setLearningDialogue(level.lines.length-1);
@@ -347,11 +384,79 @@ export default function App(){
   return()=>{cancelled=true;clearTimeout(timer);};
  // 依存するのはページと棋譜の段階のみ。盤面のアニメーション更新ではキャンセルしない。
  },[mode,learningLevelIndex,learningOutcome?.kind,learningDialogue,learningHistory.length]);
+ // Scene events run at their configured page, without advancing the dialogue.
+ useEffect(()=>{
+  const scene=LEARNING_LEVELS[learningLevelIndex].scenes?.[sceneIndex];
+  if(mode!=="learning"||!scene?.autoMove||learningOutcome||sceneAutoDone||sceneBusy.current||learningDialogue!==scene.autoMoveAt)return;
+  sceneBusy.current=true;learningAutoMovingRef.current=true;setLearningAutoMoving(true);
+  const generation=learningGeneration.current;
+  const timer=setTimeout(()=>{
+   if(generation!==learningGeneration.current)return;
+   const before={...state,turn:"gote"},action=sceneAutoAction(scene,before);
+   if(!action){setLearningOutcome({kind:"failure",lines:["後手の着手が合法ではないわ。盤面を確認してちょうだい。"]});setLearningDialogue(0);clearScene();return}
+   beginMotion(action,before);setTimeline(t=>[...t,applyLegalAction(before,action)]);
+   sceneTimers.current.push(setTimeout(()=>{
+    if(generation!==learningGeneration.current)return;
+    setLearningHistory(h=>[...h,learningMoveRecord(action,before)]);setSceneAutoDone(true);
+    setSelected(null);setHandType(null);setPieceGuide(null);clearScene();
+   },action.magic==="銃撃"?1080:600));
+  },scene.autoMoveAt===0?500:250);sceneTimers.current.push(timer);
+ },[mode,learningLevelIndex,sceneIndex,learningDialogue,sceneAutoDone,learningOutcome?.kind]);
+ // Scripted opponent actions are bound to a specific dialogue page, not to a fixed one-page step.
+ // Lock synchronously on entering the trigger page, and never cancel a pending move on re-render.
+ const scriptedAutoRunning=useRef(false);
+ const scriptedAutoTimers=useRef([]);
+ const clearScriptedAuto=()=>{
+  scriptedAutoTimers.current.forEach(clearTimeout);scriptedAutoTimers.current=[];
+  scriptedAutoRunning.current=false;learningAutoMovingRef.current=false;setLearningAutoMoving(false);
+ };
+ useEffect(()=>{
+  const level=LEARNING_LEVELS[learningLevelIndex];
+  if(mode!=="learning"||!level.steps||learningOutcome||scriptedAutoRunning.current)return;
+  const step=scriptedStep(level,learningHistory);
+  const lines=scriptedLines(level,learningHistory);
+  if(step?.side!=="gote"||learningDialogue!==scriptedAutoMovePage(step,lines))return;
+  scriptedAutoRunning.current=true;
+  learningAutoMovingRef.current=true;setLearningAutoMoving(true);
+  const generation=learningGeneration.current;
+  const historyLength=learningHistory.length;
+  const timer=setTimeout(()=>{
+   if(generation!==learningGeneration.current)return;
+   const opponent={...state,turn:"gote"};
+   const action=scriptedAutoAction(step,opponent);
+   if(!action){
+    setLearningOutcome({kind:"failure",lines:level.defaultFailureLines||["指定された後手の手が合法ではないわ。"]});
+    setLearningDialogue(0);clearScriptedAuto();return;
+   }
+   beginMotion(action,opponent);
+   setTimeline(x=>[...x,applyLegalAction(opponent,action)]);
+   const finish=setTimeout(()=>{
+    if(generation!==learningGeneration.current)return;
+    setLearningHistory(x=>[...x,learningMoveRecord(action,opponent)]);
+    // Stay on the current explanation page after the animation.
+    // The next player move is enabled on the final page of this same dialogue.
+    // The last scripted move waits for a deliberate page advance before showing success.
+    setSelected(null);setHandType(null);setPieceGuide(null);
+    clearScriptedAuto();
+   },action.magic==="銃撃"?1080:600);
+   scriptedAutoTimers.current.push(finish);
+  },250);
+  scriptedAutoTimers.current.push(timer);
+  // No effect cleanup: changing lock state must not cancel the scheduled action.
+ },[mode,learningLevelIndex,learningHistory.length,learningDialogue,learningOutcome?.kind]);
  function advanceLearningDialogue(){
   if(learningAutoMovingRef.current)return;
-  // 2/3を開く操作と同時にロックし、次のクリックが先行するのを防ぐ。
+  if(mode==="learning"&&learningLevel.scenes&&!learningOutcome){
+   const scene=learningLevel.scenes[sceneIndex];
+   if(scene&&!scene.correct?.length&&learningIsLast&&sceneAutoDone){setLearningOutcome({kind:"success",lines:learningLevel.successLines});setLearningDialogue(0);return}
+  }
   if(mode==="learning"&&learningLevel.id==="nanoka-2"&&learningOutcome?.kind==="interlude"&&learningDialogue===0&&learningHistory.length===1){
    learningAutoMovingRef.current=true;setLearningAutoMoving(true);
+  }
+  if(mode==="learning"&&learningLevel.steps&&!learningOutcome&&
+     learningHistory.length===learningLevel.steps.length&&learningIsLast){
+   setLearningOutcome({kind:"success",lines:learningLevel.successLines});
+   setLearningDialogue(0);return;
   }
   setLearningDialogue(n=>Math.min(learningLines.length-1,n+1));
  }
@@ -403,6 +508,7 @@ export default function App(){
   motionFxRef.current=null;setDifficultyDepth(depth);setDifficultyPrompt(null);setHumanSide(randomSide());setTimeline([makeInitialState()]);setSelected(null);setHandType(null);setThinking(false);setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);setStarted(true);
  }
  function startLearning(){
+  clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
   learningGeneration.current++;
   setLearningLevelIndex(0);
   request.current++;worker.current?.postMessage({type:"reset"});
@@ -417,6 +523,7 @@ export default function App(){
   backgroundMusic.current.play().catch(()=>{});
  }
  function restoreLearningLevel(levelIndex=learningLevelIndex){
+  clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
   learningAutoMovingRef.current=false;setLearningAutoMoving(false);autoHiroPending.current=false;
   learningGeneration.current++;
   request.current++;worker.current?.postMessage({type:"reset"});
@@ -426,9 +533,31 @@ export default function App(){
   setSelected(null);setHandType(null);setPieceGuide(null);setThinking(false);
   setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);
   setMotionFx(null);motionFxRef.current=null;
-  setLearningHistory([]);setLearningOutcome(null);
+  setLearningHistory([]);setLearningOutcome(null);clearScriptedAuto();
  }
- function resetLearning(){
+ function resetScriptedStep(){
+  learningGeneration.current++;clearScriptedAuto();
+  learningAutoMovingRef.current=false;setLearningAutoMoving(false);
+  motionSequence.current++;motionFxRef.current=null;setMotionFx(null);
+  if(learningOutcome?.kind==="failure"){setTimeline(t=>t.slice(0,-1));setLearningHistory(h=>h.slice(0,-1));}
+  setLearningOutcome(null);
+  // Return to the last instruction page of the step being retried, not its first page.
+  const retryHistoryLength=Math.max(0,learningHistory.length-(learningOutcome?.kind==="failure"?1:0));
+  const retryLines=scriptedLines(learningLevel,learningHistory.slice(0,retryHistoryLength));
+  setLearningDialogue(Math.max(0,retryLines.length-1));
+  setSelected(null);setHandType(null);setPieceGuide(null);
+ }
+ // The top-right retry always restarts the entire section, including page one.
+ function restartLearningSection(){
+  restoreLearningLevel();
+  setLearningDialogue(0);
+ }
+ // Retry inside the dialogue restores the position just before the failed move.
+ function retryLearningMove(){
+  if(learningLevel.scenes){
+   if(learningOutcome?.kind==="failure"){learningGeneration.current++;clearScene();motionSequence.current++;motionFxRef.current=null;setMotionFx(null);setTimeline(t=>t.slice(0,-1));setLearningHistory(h=>h.slice(0,-1));setLearningOutcome(null);setLearningDialogue(learningLevel.scenes[sceneIndex].playerMoveAt);setSelected(null);setHandType(null);setPieceGuide(null)}return;
+  }
+  if(learningLevel.steps){resetScriptedStep();return;}
   // 中継後の失敗なら、直前の自動着手完了時点に戻して再挑戦する。
   // timeline: [開始局面, ナノカb2→c2, ヒロd5→d4, 失敗した手]
   if(mode==="learning"&&learningLevel.id==="nanoka-2"&&
@@ -451,6 +580,46 @@ export default function App(){
   setLearningDialogue(Math.max(0,LEARNING_LEVELS[learningLevelIndex].lines.length-1));
  }
  function previousLearningPage(){
+  if(learningLevel.scenes){
+   if(learningAutoMovingRef.current||learningOutcome)return;
+   const scene=learningLevel.scenes[sceneIndex];
+   if(learningDialogue>0){
+    if(scene?.autoMove&&sceneAutoDone&&learningDialogue===scene.autoMoveAt){learningGeneration.current++;clearScene();motionSequence.current++;motionFxRef.current=null;setMotionFx(null);setTimeline(t=>t.slice(0,-1));setLearningHistory(h=>h.slice(0,-1));setSceneAutoDone(false);setSelected(null);setHandType(null);setPieceGuide(null)}
+    setLearningDialogue(n=>n-1);return;
+   }
+   if(sceneIndex===0)return;
+   learningGeneration.current++;clearScene();motionSequence.current++;motionFxRef.current=null;setMotionFx(null);
+   const prev=sceneIndex-1,snap=scenePlayerSnapshots.current[prev]||sceneSnapshots.current[prev]||{t:1,h:0};
+   setTimeline(t=>t.slice(0,snap.t));setLearningHistory(h=>h.slice(0,snap.h));setSceneIndex(prev);
+   setSceneAutoDone(Boolean(learningLevel.scenes[prev].autoMove));setLearningDialogue(learningLevel.scenes[prev].lines.length-1);setSelected(null);setHandType(null);setPieceGuide(null);return;
+  }
+  if(learningLevel.steps){
+   if(learningAutoMovingRef.current||learningDialogue<0)return;
+   if(learningDialogue>0){
+    const previous=learningLevel.steps[learningHistory.length-1];
+    if(previous?.side==="gote"&&learningDialogue===scriptedAutoMovePage(previous,previous.lines)){
+     learningGeneration.current++;clearScriptedAuto();
+     motionSequence.current++;motionFxRef.current=null;setMotionFx(null);
+     setTimeline(t=>t.slice(0,-1));setLearningHistory(h=>h.slice(0,-1));
+     setSelected(null);setHandType(null);setPieceGuide(null);
+    }
+    setLearningDialogue(n=>n-1);
+    return;
+   }
+   if(!learningHistory.length||learningOutcome)return;
+   const previous=learningLevel.steps[learningHistory.length-1];
+   const previousLines=scriptedLines(learningLevel,learningHistory.slice(0,-1));
+   if(previous?.side==="gote"){
+    learningGeneration.current++;clearScriptedAuto();
+    motionSequence.current++;motionFxRef.current=null;setMotionFx(null);
+    setTimeline(t=>t.slice(0,-1));
+    setLearningHistory(h=>h.slice(0,-1));
+    setLearningDialogue(Math.max(0,scriptedAutoMovePage(previous,previousLines)-1));
+   }else{
+    setLearningDialogue(Math.max(0,previousLines.length-1));
+   }
+   return;
+  }
   if(learningAutoMovingRef.current||learningDialogue<=0)return;
   // 中継ページを戻したら、戻り先の時点まで局面・棋譜を巻き戻す。
   // 2/3 -> 1/3 ではヒロの自動着手だけを取り消し、ナノカの初手は残す。
@@ -491,9 +660,21 @@ export default function App(){
   setConfirmLearningBack(false);setLearningChapterSelect(false);setStarted(false);setMode("ai");
  }
  const learningLevel=LEARNING_LEVELS[learningLevelIndex];
- const learningLines=learningOutcome?.lines||learningLevel.lines;
+ const learningLines=learningOutcome?.lines||(learningLevel.scenes?learningLevel.scenes[sceneIndex]?.lines||learningLevel.lines:(learningLevel.steps?scriptedLines(learningLevel,learningHistory):learningLevel.lines));
  const learningIsLast=learningDialogue===learningLines.length-1;
- const learningBoardLocked=mode==="learning"&&(learningAutoMoving||learningOutcome?.kind==="failure"||learningOutcome?.kind==="success"||(learningOutcome?.kind==="interlude" ? !(learningDialogue===learningLines.length-1&&learningHistory.length===2) : learningDialogue!==learningLevel.lines.length-1||(learningLevel.id==="nanoka-2"?learningHistory.length!==0:learningHistory.length >= (learningLevel.correct.length || 1))));
+ const learningBoardLocked=mode==="learning"&&(learningAutoMoving||learningOutcome?.kind==="failure"||learningOutcome?.kind==="success"||(learningLevel.scenes
+  ? (()=>{const scene=learningLevel.scenes[sceneIndex];return !scene?.correct?.length||learningDialogue<(scene.playerMoveAt??scene.lines.length-1)||(Boolean(scene.autoMove)&&!sceneAutoDone)})()
+  : learningLevel.steps
+  ? (()=>{
+      const current=scriptedStep(learningLevel,learningHistory);
+      if(current?.side!=="sente")return true;
+      const previous=learningLevel.steps[learningHistory.length-1];
+      const unlockAt=previous?.side==="gote"
+       ? (Number.isInteger(previous.allowNextMoveAt)?previous.allowNextMoveAt:learningLines.length-1)
+       : learningLines.length-1;
+      return learningDialogue<unlockAt;
+    })()
+  : (learningOutcome?.kind==="interlude" ? !(learningDialogue===learningLines.length-1&&learningHistory.length===2) : learningDialogue!==learningLevel.lines.length-1||(learningLevel.id==="nanoka-2"?learningHistory.length!==0:learningHistory.length >= (learningLevel.correct?.length || 1)))));
  async function beginMotion(action,before){
   const moving=action.category==="drop"?action.piece:before.board[action.from[0]][action.from[1]];
   const captureAt=action.swap?null:action.captureAt??(before.board[action.to[0]][action.to[1]]?[...action.to]:null);
@@ -598,7 +779,7 @@ export default function App(){
   <header className="topbar">
    {mode==="learning"?<button className="how-to-button learning-header-guide" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>:<div className="branding"><div className="eyebrow">MANOSABA SHOGI</div><h1>魔法少女ノ魔法将棋</h1></div>}
    {mode==="learning"&&<LearningChapterHeading level={learningLevel}/>}
-   <div className="match-actions">{mode==="learning"?<><button className="resign-button" onClick={resetLearning}>再挑戦</button><button onClick={()=>setLearningChapterSelect(true)}>章選択</button></>:<><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></>}</div>
+   <div className="match-actions">{mode==="learning"?<><button className="resign-button" onClick={restartLearningSection}>再挑戦</button><button onClick={()=>setLearningChapterSelect(true)}>章選択</button></>:<><OnlineLobby online={online} background={mode==="ai"} onCpu={()=>startNewMatch(5,true)}/><button className="resign-button" onClick={resign} disabled={gameOver}>投了</button></>}</div>
   </header>
   {mode==="online"&&<div className="online-bar" role="status">
    <div className="online-bar__opponent"><span>VS {online.match?.nicknames?.[opponentSide]||"相手"}</span>{online.match?.profiles?.[opponentSide]?.rank&&<span className="opponent-rank-badge" aria-label={`相手の段位 ${online.match.profiles[opponentSide].rank}`}><RankLabel rank={online.match.profiles[opponentSide].rank}/></span>}</div>
@@ -618,7 +799,7 @@ export default function App(){
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
-  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} onRetry={resetLearning} onNextChapter={advanceLearningChapter}/>}
+  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean((learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&sceneAutoDone)||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
   {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={chooseLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
   {mode==="learning"&&confirmLearningBack&&<LearningBackConfirm onConfirm={leaveLearning} onCancel={()=>setConfirmLearningBack(false)}/>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
