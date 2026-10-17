@@ -587,7 +587,7 @@ export default function App(){
  <h2 className="title-screen__logo"><span style={{display:"block",fontSize:"50%",lineHeight:1.5}}>【非公式作品】<br />計画性のないナノカちゃん作</span>魔法少女ノ魔法将棋</h2>
  <div className="title-screen__actions">
    <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>CPU戦</button><button className="title-screen__start title-screen__learning" onClick={startLearning}>対戦のコツ</button></div>
-   <button className="title-screen__start" onClick={()=>online.queue()} disabled={online.status==="connecting"||online.status==="queued"}>オンライン対戦（{online.waitingCount===null?"-":online.waitingCount}人待機）</button>
+   <button className="title-screen__start" onClick={()=>online.queue()} disabled={online.status==="connecting"||online.status==="queued"}>オンライン対戦{online.operatorAccepting&&online.waitingCount===0?"（運営 対戦可）":`（${online.waitingCount===null?"-":online.waitingCount}人待機）`}</button>
    <a className="title-screen__shop" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a>
   </div>
   <OnlineLobby online={online} background={Boolean(difficultyPrompt)} onCpu={()=>startNewMatch(5,true)}/>

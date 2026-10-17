@@ -8,6 +8,7 @@ import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult
 export const key = positionKey;
 export function createGameServer({origins=['http://localhost:5173'],turnMs=30000,graceMs=20000,animationMs=1100,startDelayMs=3000,cpuPresenceTtlMs=30000,adminActivityTtlMs=86400000,adminPassword=process.env.ADMIN_PASSWORD||'',profilesPath=process.env.PLAYER_PROFILES_PATH||new URL('./data/player-profiles.json',import.meta.url),historyPath=process.env.MATCH_HISTORY_PATH||new URL('./data/match-history.jsonl',import.meta.url)}={}) {
  const sessions=new Map(),matches=new Map(),queue=[];
+ let operatorAccepting=false; // restart defaults to OFF; never advertise availability without explicit opt-in
  const cpuPlayers=new Map(),learningPlayers=new Map(),adminActivity=new Map();
  let lone=null;
  const refreshLone=()=>{
@@ -16,7 +17,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
   if(!player){lone=null;return}
   if(lone?.token!==player.token)lone={token:player.token,id:randomUUID(),since:Date.now(),nickname:player.nickname};
  };
- const lonelyWaiting=()=>{refreshLone();return lone?{id:lone.id,since:lone.since,nickname:lone.nickname,eligible:Date.now()-lone.since>=60000}:null};
+ const lonelyWaiting=()=>{refreshLone();return lone?{id:lone.id,since:lone.since,nickname:lone.nickname,eligible:true}:null};
  const waitingEvents=[];let waitingSequence=0;const waitingEpoch=randomUUID();
  const pruneActivity=()=>{for(const [id,p]of adminActivity)if(Date.now()-p.at>=adminActivityTtlMs)adminActivity.delete(id)};
  const pruneCpu=()=>{const now=Date.now();for(const [id,p]of cpuPlayers)if(now-p.at>=cpuPresenceTtlMs)cpuPlayers.delete(id)};
@@ -66,8 +67,8 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
    res.setHeader('Cache-Control','no-store');res.setHeader('X-Frame-Options','DENY');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Content-Type-Options','nosniff');
    const adminJson=(code,data)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data))};
    if(!adminEnabled){adminJson(503,{error:'管理画面は未設定です。ADMIN_PASSWORDを16文字以上で設定してください'});return}
-   if(req.method!=='GET'){adminJson(405,{error:'method not allowed'});return}
-   if(requestUrl.pathname==='/admin'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(adminHtml);return}
+   if(req.method!=='GET'&&!(req.method==='POST'&&requestUrl.pathname==='/admin/operator')){adminJson(405,{error:'method not allowed'});return}
+   if(requestUrl.pathname==='/admin'&&req.method==='GET'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(adminHtml);return}
    const ip=req.socket.remoteAddress||'unknown',now=Date.now();
    const failed=adminFailures.get(ip);
    if(failed&&now-failed.at<60000&&failed.count>=10){adminJson(429,{error:'1分後に再試行してください'});return}
@@ -78,6 +79,15 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
     adminJson(401,{error:'パスワードが違います'});return;
    }
    adminFailures.delete(ip);
+   if(requestUrl.pathname==='/admin/operator'&&req.method==='POST'){
+    let raw='';try{
+     for await(const chunk of req){raw+=chunk;if(raw.length>512){adminJson(413,{error:'too large'});return}}
+     const body=JSON.parse(raw||'{}');
+     if(typeof body.accepting!=='boolean'){adminJson(400,{error:'accepting must be boolean'});return}
+     operatorAccepting=body.accepting;
+     adminJson(200,{ok:true,operatorAccepting});
+    }catch{adminJson(400,{error:'invalid JSON'})}return;
+   }
    const all=history.list();
    const status=r=>r.result?'終了':matches.has(r.id)?'対局中':'中断（サーバー再起動）';
    if(requestUrl.pathname==='/admin/matches'){
@@ -86,7 +96,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
     const offset=Math.max(0,Math.trunc(Number(requestUrl.searchParams.get('offset'))||0));
     const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'});
     const today=day.format(now);
-    adminJson(200,{summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,cpuActive:cpuCount(),learningActive:learningCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<adminActivityTtlMs);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
+    adminJson(200,{operatorAccepting,summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,cpuActive:cpuCount(),learningActive:learningCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<adminActivityTtlMs);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
    }
    if(requestUrl.pathname==='/admin/match'){
     const r=history.get(requestUrl.searchParams.get('id'));
@@ -126,7 +136,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
     json(200,{ok:true});
    }catch{json(400,{error:'invalid JSON'})}return;
   }
-   if(req.method==='GET'&&url.pathname==='/queue-status'){res.setHeader('Cache-Control','no-store');json(200,{waiting:queue.filter(p=>p.queued&&connected(p)).length});return}
+   if(req.method==='GET'&&url.pathname==='/queue-status'){res.setHeader('Cache-Control','no-store');json(200,{waiting:queue.filter(p=>p.queued&&connected(p)).length,operatorAccepting});return}
   if(url.pathname==='/health'){json(200,{ok:true});return}
   if(req.method==='POST'&&url.pathname==='/player'){
    try{json(200,profiles.register())}catch{json(503,{error:'プロフィールを保存できません。再度お試しください'})}return;

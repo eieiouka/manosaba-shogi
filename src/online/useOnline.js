@@ -6,6 +6,7 @@ export function useOnline(onMatch,onLobby){
  const [profile,setProfile]=useState(null);
  const [waitEstimateSeconds,setWaitEstimateSeconds]=useState(null);
  const [waitingCount,setWaitingCount]=useState(null);
+ const [operatorAccepting,setOperatorAccepting]=useState(false);
  const [status,setStatus]=useState('idle'),[error,setError]=useState(''),[match,setMatch]=useState(null),[now,setNow]=useState(Date.now());
  const ref=useRef({}),callback=useRef(onMatch);callback.current=onMatch;
  useEffect(()=>{const t=setInterval(()=>setNow(Date.now()+(ref.current.offset||0)),50);return()=>{clearInterval(t);ref.current.events?.close()}},[]);
@@ -14,7 +15,7 @@ export function useOnline(onMatch,onLobby){
    const poll=async()=>{
     try{
      const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),4000);
-     try{const r=await fetch(BASE+'/queue-status',{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error('queue unavailable');const d=await r.json();if(live)setWaitingCount(Number.isInteger(d.waiting)?d.waiting:null)}finally{clearTimeout(timeout)}
+     try{const r=await fetch(BASE+'/queue-status',{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error('queue unavailable');const d=await r.json();if(live){setWaitingCount(Number.isInteger(d.waiting)?d.waiting:null);setOperatorAccepting(d.operatorAccepting===true)}}finally{clearTimeout(timeout)}
     }catch{if(live)setWaitingCount(null)}
    };
    poll();const timer=setInterval(poll,5000);
@@ -116,5 +117,5 @@ export function useOnline(onMatch,onLobby){
   async function rematch(){if(!match?.id)return;try{await post('/rematch',{id:match.id});setError('')}catch(e){setError(e.message)}}
  async function resign(){try{await post('/resign',{id:match.id})}catch(e){setError(e.message)}}
  async function resetNickname(){await loadProfile();await saveName('');try{localStorage.removeItem('manosaba-nickname')}catch{throw Error('端末の名前をリセットできませんでした')}setNickname('');return true}
- return {waitingCount,rematch,waitEstimateSeconds,profile,loadProfile,resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,editNickname,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
+ return {waitingCount,operatorAccepting,rematch,waitEstimateSeconds,profile,loadProfile,resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,editNickname,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
 }
