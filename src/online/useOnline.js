@@ -96,18 +96,19 @@ export function useOnline(onMatch,onLobby){
   })();try{await ref.current.connecting}finally{ref.current.connecting=null}
  }
  const validName=name=>Boolean(name)&&Array.from(name).length<=10&&!/[\u0000-\u001f\u007f]/.test(name);
- async function beginQueue(name){setError('');setStatus('connecting');try{await loadProfile();await saveName(name);setNickname(name);try{localStorage.setItem('manosaba-nickname',name)}catch{}await connect();await post('/queue',{nickname:name})}catch(e){setError(e.message);setStatus(e.code==='nickname-taken'?'naming':'idle')}}
- function queue(){
-  onLobby?.();setError('');
+ async function beginQueue(name,queueMode='online'){setError('');setStatus('connecting');try{await loadProfile();await saveName(name);setNickname(name);try{localStorage.setItem('manosaba-nickname',name)}catch{}await connect();await post('/queue',{nickname:name,mode:queueMode})}catch(e){setError(e.message);setStatus(e.code==='nickname-taken'?'naming':'idle')}}
+ function queue(queueMode='online'){
+  ref.current.requestedQueueMode=queueMode;
+  if(queueMode==='online')onLobby?.();setError('');
   const name=nickname.trim();
   if(!validName(name)){setStatus('naming');return}
-  return beginQueue(name);
+  return beginQueue(name,queueMode);
  }
  function editNickname(){onLobby?.();setError('');setStatus('naming')}
  function submitNickname(entered){
   const name=entered.trim();
   if(!validName(name)){setError('ニックネームを1〜10文字で入力してください');return}
-  return beginQueue(name);
+  return beginQueue(name,ref.current.requestedQueueMode||'online');
  }
  async function cancel(){
   if(status==='naming'||status==='idle'){setError('');setStatus('idle');return}

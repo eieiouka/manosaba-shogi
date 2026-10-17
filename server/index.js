@@ -24,6 +24,9 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
  const cpuCount=()=>{pruneCpu();let count=0;for(const p of cpuPlayers.values())if(p.active)count++;return count};
  const pruneLearning=()=>{const now=Date.now();for(const [id,p]of learningPlayers)if(now-p.at>=cpuPresenceTtlMs)learningPlayers.delete(id)};
  const learningCount=()=>{pruneLearning();return new Set([...learningPlayers.values()].filter(p=>p.active).map(p=>p.browserId)).size};
+  // All modes share one authoritative matchmaking queue. Waiting subcounts are subsets.
+  const queueCounts=()=>({online:queue.filter(p=>p.queued&&connected(p)&&p.queueMode==='online').length,cpu:queue.filter(p=>p.queued&&connected(p)&&p.queueMode==='cpu').length,learning:queue.filter(p=>p.queued&&connected(p)&&p.queueMode==='learning').length});
+  // All modes share one authoritative matchmaking queue. Waiting subcounts are subsets.
  const history=createHistory(historyPath);
  const profiles=createProfiles(profilesPath);
  const updateRanks=m=>{if(m.rankProcessed)return;m.rankProcessed=true;try{
@@ -48,7 +51,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
    if(p.waitEstimateSeconds!==seconds){p.waitEstimateSeconds=seconds;send(p,{type:'wait-estimate',seconds})}
   }
  };
- const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false;refreshLone()};
+ const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false;p.queueMode=null;refreshLone()};
  const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames,profiles:Object.fromEntries(m.players.map((p,i)=>[i===0?'sente':'gote',profiles.view(p.profile)])),ratingChanges:m.ratingChanges,rankError:m.rankError,rematch:m.result?{requested:m.rematchVotes?.length||0,mineBySide:{sente:Boolean(m.rematchVotes?.includes(m.players[0].token)),gote:Boolean(m.rematchVotes?.includes(m.players[1].token))},available:m.players.every(connected)&&Date.now()-(m.finishedAt||Date.now())<300000}:null});
  const broadcast=(m,extra={})=>m.players.forEach((p,i)=>send(p,{...snapshot(m),side:i===0?'sente':'gote',...extra}));
  const finish=(m,winner,reason)=>{if(m.result)return;m.result={winner,reason};m.deadline=null;m.readyAt=null;m.paused=false;m.finishedAt=Date.now();updateRanks(m);broadcast(m);history.end(m);refreshLone()};
@@ -60,7 +63,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
    const m={id:randomUUID(),startedAt:Date.now(),players,nicknames:{sente:players[0].nickname,gote:players[1].nickname},state,revision:0,result:null,readyAt,deadline:readyAt+turnMs,paused:false,seen:new Map([[key(state),1]]),rematchVotes:[]};
    matches.set(m.id,m);history.start(m);players.forEach(p=>p.match=m);broadcast(m);refreshLone();return m;
   };
- const match=()=>{while(queue.length>=2){const a=queue.shift(),b=queue.shift();a.queued=b.queued=false;const players=randomInt(2)?[a,b]:[b,a];createPairMatch(players)}refreshLone()};
+ const match=()=>{while(queue.length>=2){const a=queue.shift(),b=queue.shift();a.queued=b.queued=false;a.queueMode=b.queueMode=null;a.queueMode=b.queueMode=null;const players=randomInt(2)?[a,b]:[b,a];createPairMatch(players)}refreshLone()};
  const server=http.createServer(async(req,res)=>{
   const requestUrl=new URL(req.url,'http://localhost');
   if(requestUrl.pathname==='/admin'||requestUrl.pathname.startsWith('/admin/')){
@@ -96,7 +99,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
     const offset=Math.max(0,Math.trunc(Number(requestUrl.searchParams.get('offset'))||0));
     const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'});
     const today=day.format(now);
-    adminJson(200,{operatorAccepting,summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queue.length,cpuActive:cpuCount(),learningActive:learningCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<adminActivityTtlMs);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
+    adminJson(200,{operatorAccepting,summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queueCounts().online,cpuWaiting:queueCounts().cpu,learningWaiting:queueCounts().learning,cpuActive:cpuCount(),learningActive:learningCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<adminActivityTtlMs);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
    }
    if(requestUrl.pathname==='/admin/match'){
     const r=history.get(requestUrl.searchParams.get('id'));
@@ -173,13 +176,14 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
    if(!p.stream){json(409,{error:'接続待ちです'});return}
    if(p.match&&!p.match.result){json(409,{error:'対局中です'});return}
    const nickname=typeof body.nickname==='string'?body.nickname.trim():'';
+    const queueMode=['cpu','learning'].includes(body.mode)?body.mode:'online';
    if(!nickname||Array.from(nickname).length>10||/[\u0000-\u001f\u007f]/.test(nickname)){json(400,{error:'ニックネームは1〜10文字で入力してください'});return}
    const profile=req.headers['x-player-key']?profiles.get(req.headers['x-player-key']):p.profile;
    if(!profile){json(426,{error:'ゲーム画面を再読み込みしてください。戦績を保存するためのプロフィール登録が必要です'});return}
    if(req.headers['x-player-key']&&!profile){json(401,{error:'プロフィールを認証できません'});return}
    if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
    try{profiles.name(profile,nickname)}catch(e){json(e.code==='nickname-taken'?409:503,{error:e.code==='nickname-taken'?e.message:'プロフィールを保存できません',code:e.code});return}
-   p.profile=profile;p.nickname=nickname;
+   p.profile=profile;p.nickname=nickname;p.queueMode=queueMode;p.queueMode=queueMode;
    if(p.match?.result){p.match.rematchVotes=[];broadcast(p.match)}p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(170,191);p.waitEstimateSeconds=undefined;queue.push(p);waitingEvents.push({sequence:++waitingSequence,nickname:p.nickname,at:Date.now(),busyWatch:[...new Set([...adminActivity.values()].filter(a=>a.active&&Date.now()-a.at<adminActivityTtlMs).map(a=>a.id))]});if(waitingEvents.length>200)waitingEvents.shift();refreshLone()}send(p,{type:'queued'});match();json(200,{ok:true});return;
   }
   if(url.pathname==='/cancel'){removeQueue(p);send(p,{type:'idle'});json(200,{ok:true});return}
