@@ -522,22 +522,12 @@ export default function App(){
    const target=autoMatchPrompt;
    setAutoMatchPrompt(null);
    if(!target)return;
-   if(typeof target==='object'&&target.kind==='cpu-rematch'){
-    if(yes&&!alreadyWaiting){setBackgroundQueueMode('cpu');online.queue('cpu');}
-    else if(!alreadyWaiting)setBackgroundQueueMode(null);
-    startNewMatch(target.depth,yes||alreadyWaiting);
-    return;
-   }
    setBackgroundQueueMode(yes?target:null);
    if(target==='cpu')setDifficultyPrompt('start');
    else {startLearning();if(yes)online.queue('learning');}
   }
   function chooseCpuDifficulty(depth){
    setDifficultyPrompt(null);
-   if(difficultyPrompt==='rematch'&&!alreadyWaiting){
-    setAutoMatchPrompt({kind:'cpu-rematch',depth});
-    return;
-   }
    startNewMatch(depth,alreadyWaiting||backgroundQueueMode==='cpu');
    if(backgroundQueueMode==='cpu'&&!alreadyWaiting)online.queue('cpu');
   }
