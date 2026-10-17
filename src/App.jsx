@@ -109,7 +109,6 @@ export default function App(){
  const [difficultyDepth,setDifficultyDepth]=useState(15);
  const [difficultyPrompt,setDifficultyPrompt]=useState(null);
  const [autoMatchPrompt,setAutoMatchPrompt]=useState(null);
- const [rematchDepth,setRematchDepth]=useState(null);
  const [backgroundQueueMode,setBackgroundQueueMode]=useState(null);
  const [savedReturnMode,setSavedReturnMode]=useState(()=>{try{return JSON.parse(localStorage.getItem('manosaba-v80-return-snapshot')||'null')?.mode||null}catch{return null}});
  const returnSnapshotRef=useRef(null);
@@ -126,7 +125,7 @@ export default function App(){
  const learningAutoMovingRef=useRef(false);
  const state=timeline[timeline.length-1];
  const online=useOnline(data=>{
-   if(started&&(mode==='ai'||mode==='learning')&&backgroundQueueMode===mode){
+   if(started&&(mode==='ai'||mode==='learning')&&(backgroundQueueMode===mode||(mode==='ai'&&backgroundQueueMode==='cpu'))){
     const snapshot={mode,timeline,humanSide,difficultyDepth,learningLevelIndex,learningDialogue,learningHistory,learningOutcome,sceneIndex,sceneAutoDone,sceneSnapshots:sceneSnapshots.current,scenePlayerSnapshots:scenePlayerSnapshots.current};
     returnSnapshotRef.current=snapshot;setSavedReturnMode(mode);
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(snapshot))}catch{}
@@ -506,24 +505,40 @@ export default function App(){
   
   setThinking(false);setSelected(null);setHandType(null);setResigned(true);
  }
+  const alreadyWaiting=online.status==='queued'||online.status==='connecting';
+  function requestLearningLevel(index){
+   if(index<0||index>=LEARNING_LEVELS.length)return;
+   if(alreadyWaiting){chooseLearningLevel(index);return;}
+   setLearningChapterSelect(false);
+   setAutoMatchPrompt({kind:'learning-level',index});
+  }
   function chooseAutoMatch(yes){
-   const target=autoMatchPrompt;setAutoMatchPrompt(null);
+   const target=autoMatchPrompt;
+   setAutoMatchPrompt(null);
    if(!target)return;
+   if(typeof target==='object'&&target.kind==='learning-level'){
+    chooseLearningLevel(target.index);
+    if(yes&&!alreadyWaiting){setBackgroundQueueMode('learning');online.queue('learning');}
+    return;
+   }
+   if(typeof target==='object'&&target.kind==='cpu-rematch'){
+    if(yes&&!alreadyWaiting){setBackgroundQueueMode('cpu');online.queue('cpu');}
+    else if(!alreadyWaiting)setBackgroundQueueMode(null);
+    startNewMatch(target.depth,yes||alreadyWaiting);
+    return;
+   }
    setBackgroundQueueMode(yes?target:null);
    if(target==='cpu')setDifficultyPrompt('start');
-   else if(target==='cpu-rematch'){
-    if(!yes && (online.status==='queued'||online.status==='connecting'))online.cancel();
-    startNewMatch(rematchDepth??difficultyDepth,yes);
-    setRematchDepth(null);
-    if(yes)online.queue('cpu');
-   }else {startLearning();if(yes)online.queue('learning');}
+   else {startLearning();if(yes)online.queue('learning');}
   }
   function chooseCpuDifficulty(depth){
-   if(difficultyPrompt==='rematch'){
-    setRematchDepth(depth);setDifficultyPrompt(null);setAutoMatchPrompt('cpu-rematch');return;
+   setDifficultyPrompt(null);
+   if(difficultyPrompt==='rematch'&&!alreadyWaiting){
+    setAutoMatchPrompt({kind:'cpu-rematch',depth});
+    return;
    }
-   startNewMatch(depth,backgroundQueueMode==='cpu');
-   if(backgroundQueueMode==='cpu')online.queue('cpu');
+   startNewMatch(depth,alreadyWaiting||backgroundQueueMode==='cpu');
+   if(backgroundQueueMode==='cpu'&&!alreadyWaiting)online.queue('cpu');
   }
   function restorePreviousMode(){
    let saved=returnSnapshotRef.current;
@@ -705,7 +720,7 @@ export default function App(){
  function advanceLearningChapter(){
   const next=learningLevelIndex+1;
   if(next>=LEARNING_LEVELS.length){setLearningChapterSelect(true);return;}
-  chooseLearningLevel(next);
+  requestLearningLevel(next);
  }
  function leaveLearning(){
    if(backgroundQueueMode==='learning'){online.cancel();setBackgroundQueueMode(null)}
@@ -827,7 +842,7 @@ export default function App(){
    <a className="title-screen__shop" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a>
   </div>
   <OnlineLobby online={online} background={Boolean(difficultyPrompt||backgroundQueueMode)} onCpu={()=>startNewMatch(5,true)}/>
-  {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);setBackgroundQueueMode(null)}}/>}
+  {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);if(!alreadyWaiting)setBackgroundQueueMode(null)}}/>}
   {autoMatchPrompt&&<div className="auto-match-overlay"><section className="auto-match-dialog" role="dialog" aria-modal="true"><h2>オンライン対戦への自動移行</h2><p>相手が来たら、オンライン対戦に自動移行しますか？</p><p>進行状況は保存されます。</p><div className="auto-match-actions"><button className="auto-match-yes" onClick={()=>chooseAutoMatch(true)}>はい</button><button className="auto-match-no" onClick={()=>chooseAutoMatch(false)}>いいえ</button></div></section></div>}
  </main>;
 
@@ -842,7 +857,7 @@ export default function App(){
    <div className="online-bar__clock">{online.match?.result?"対局終了":online.match?.paused?"再接続待ち":online.now<online.match?.readyAt?"準備中…":state.turn===humanSide?`残り${online.remaining}秒`:"\u00a0"}</div>
    {online.error&&<span>{online.error}</span>}
   </div>}
-  {backgroundQueueMode===mode&&online.status==='queued'&&<div className="auto-match-status" role="status">対人戦の相手を探しています <button onClick={()=>{online.cancel();setBackgroundQueueMode(null)}}>待機解除</button></div>}
+  {(backgroundQueueMode===mode||(mode==='ai'&&backgroundQueueMode==='cpu'))&&online.status==='queued'&&<div className="auto-match-status" role="status">対人戦の相手を探しています <button onClick={()=>{online.cancel();setBackgroundQueueMode(null)}}>待機解除</button></div>}
   <main className="game-stage">
    <Hand className="hand--opponent" title="相手の持ち駒" pieces={visibleHand(opponentSide)} disabled activeType={null} onPick={()=>{}} perspective={humanSide} reverse onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${activeGuide?.row===r&&activeGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${showCpuInvite?"result-overlay--cpu-invite":""} ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div>{showCpuInvite&&<><p className="result-overlay__invite">強いですね！対人戦もやってみませんか？</p><button className="result-overlay__again result-overlay__online" disabled={online.status==="connecting"||online.status==="queued"} onClick={()=>{setStarted(false);online.queue()}}>対人戦</button></>}{mode==="online"&&online.match?.result&&<div className="online-rematch-request">
@@ -857,16 +872,14 @@ export default function App(){
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
   {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
-   {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
   {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean((learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&sceneAutoDone)||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
-  {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={chooseLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
+  {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={requestLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
   {mode==="learning"&&confirmLearningBack&&<LearningBackConfirm onConfirm={leaveLearning} onCancel={()=>setConfirmLearningBack(false)}/>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
   {showHowTo&&<HowToPlayDialog onClose={()=>setShowHowTo(false)}/>} 
-  {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);setBackgroundQueueMode(null)}}/>}
+  {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);if(!alreadyWaiting)setBackgroundQueueMode(null)}}/>}
   {autoMatchPrompt&&<div className="auto-match-overlay"><section className="auto-match-dialog" role="dialog" aria-modal="true"><h2>オンライン対戦への自動移行</h2><p>相手が来たら、オンライン対戦に自動移行しますか？</p><p>進行状況は保存されます。</p><div className="auto-match-actions"><button className="auto-match-yes" onClick={()=>chooseAutoMatch(true)}>はい</button><button className="auto-match-no" onClick={()=>chooseAutoMatch(false)}>いいえ</button></div></section></div>}
-
- </div>;
+  </div>;
 }
 
 function OnlineLobby({online,background=false,onCpu}){
