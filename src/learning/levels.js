@@ -85,6 +85,7 @@ export const LEARNING_LEVELS = [
   successLines:[
    "正解よ。遠方狙撃で遠野ハンナを一方的に取れたわね。",
    "相手の援軍がいても、射線が通っていればタダで取れるのが私の強みよ。",
+   "相手の援軍がいても、射線が通っていればタダで取れるのが私の強みよ。",
   ],
   branches:[
    {id:"nanoka-other",when:{piece:"nanoka"},lines:["私を動かすのは正しいけど、そこじゃないわ。相手の遠野ハンナを狙いなさい。"]},
@@ -92,7 +93,7 @@ export const LEARNING_LEVELS = [
   ],
   // 中継後、ナノカの遠方狙撃を間違えたときのセリフ（App.jsxに直書きしない）
   finalMoveFailureLines:["取れる駒を取らないなんて…。頭が悪いわ、まるで桜羽エマね。"],
-  defaultFailureLines:["その手では生け捕りできないわ。最初からやり直しなさい。"],
+  defaultFailureLines:["私の知らない手を指さないでちょうだい。"],
  }
 
 ];
