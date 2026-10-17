@@ -70,7 +70,15 @@ export function useOnline(onMatch,onLobby){
     if(data.type==='connected'){if(data.profile)setProfile(data.profile);ready=true;clearTimeout(timeout);ref.current.connected=true;setConnected(true);setError('');resolve()}
     if(data.type==='wait-estimate'&&Number.isInteger(data.seconds)&&data.seconds>=0)setWaitEstimateSeconds(data.seconds);
     if(data.type==='queued')setStatus('queued');if(data.type==='idle')setStatus('idle');
-    if(data.type==='match'){if(data.profiles?.[data.side])setProfile(data.profiles[data.side]);setStatus('match');setMatch(data);setError('');callback.current(data)}
+    if(data.type==='match'){
+      // Reconnect may replay a finished match. Never switch CPU/learning/title
+      // back to an old result screen. Still update an already displayed match.
+      if(data.result && ref.current.activeMatchId!==data.id)return;
+      if(data.profiles?.[data.side])setProfile(data.profiles[data.side]);
+      setStatus('match');setMatch(data);setError('');
+      ref.current.activeMatchId=data.id;
+      callback.current(data);
+     }
    };
    events.onerror=()=>{
     if(failed||ref.current.events!==events)return;
