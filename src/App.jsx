@@ -109,6 +109,7 @@ export default function App(){
  const [difficultyDepth,setDifficultyDepth]=useState(15);
  const [difficultyPrompt,setDifficultyPrompt]=useState(null);
  const [autoMatchPrompt,setAutoMatchPrompt]=useState(null);
+ const [rematchDepth,setRematchDepth]=useState(null);
  const [backgroundQueueMode,setBackgroundQueueMode]=useState(null);
  const [savedReturnMode,setSavedReturnMode]=useState(()=>{try{return JSON.parse(localStorage.getItem('manosaba-v80-return-snapshot')||'null')?.mode||null}catch{return null}});
  const returnSnapshotRef=useRef(null);
@@ -510,9 +511,17 @@ export default function App(){
    if(!target)return;
    setBackgroundQueueMode(yes?target:null);
    if(target==='cpu')setDifficultyPrompt('start');
-   else {startLearning();if(yes)online.queue('learning');}
+   else if(target==='cpu-rematch'){
+    if(!yes && (online.status==='queued'||online.status==='connecting'))online.cancel();
+    startNewMatch(rematchDepth??difficultyDepth,yes);
+    setRematchDepth(null);
+    if(yes)online.queue('cpu');
+   }else {startLearning();if(yes)online.queue('learning');}
   }
   function chooseCpuDifficulty(depth){
+   if(difficultyPrompt==='rematch'){
+    setRematchDepth(depth);setDifficultyPrompt(null);setAutoMatchPrompt('cpu-rematch');return;
+   }
    startNewMatch(depth,backgroundQueueMode==='cpu');
    if(backgroundQueueMode==='cpu')online.queue('cpu');
   }
@@ -855,6 +864,7 @@ export default function App(){
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
   {showHowTo&&<HowToPlayDialog onClose={()=>setShowHowTo(false)}/>} 
   {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);setBackgroundQueueMode(null)}}/>}
+  {autoMatchPrompt&&<div className="auto-match-overlay"><section className="auto-match-dialog" role="dialog" aria-modal="true"><h2>オンライン対戦への自動移行</h2><p>相手が来たら、オンライン対戦に自動移行しますか？</p><p>進行状況は保存されます。</p><div className="auto-match-actions"><button className="auto-match-yes" onClick={()=>chooseAutoMatch(true)}>はい</button><button className="auto-match-no" onClick={()=>chooseAutoMatch(false)}>いいえ</button></div></section></div>}
 
  </div>;
 }
