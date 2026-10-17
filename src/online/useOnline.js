@@ -75,10 +75,14 @@ export function useOnline(onMatch,onLobby){
       // Reconnect may replay a finished match. Never switch CPU/learning/title
       // back to an old result screen. Still update an already displayed match.
       if(data.result && ref.current.activeMatchId!==data.id)return;
-      if(data.profiles?.[data.side])setProfile(data.profiles[data.side]);
-      setStatus('match');setMatch(data);setError('');
-      ref.current.activeMatchId=data.id;
-      callback.current(data);
+       const previous=ref.current.lastMatchSnapshot;
+       const gameplayChanged=!previous||previous.id!==data.id||previous.revision!==data.revision||
+         JSON.stringify(previous.result)!==JSON.stringify(data.result)||previous.paused!==data.paused||previous.readyAt!==data.readyAt;
+       ref.current.lastMatchSnapshot={id:data.id,revision:data.revision,result:data.result,paused:data.paused,readyAt:data.readyAt};
+       if(data.profiles?.[data.side])setProfile(data.profiles[data.side]);
+       setStatus('match');setMatch(data);setError('');
+       ref.current.activeMatchId=data.id;
+       if(gameplayChanged)callback.current(data);
      }
    };
    events.onerror=()=>{

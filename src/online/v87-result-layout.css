@@ -11,3 +11,16 @@
  .result-overlay__actions { gap:6px; }
  .result-overlay__actions > button { flex-basis:100px; }
 }
+
+/* スマホ版：対人戦確認ポップアップの説明文を小さくする */
+@media (max-width: 760px) and (hover: none) and (pointer: coarse) {
+  .auto-match-dialog p {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .auto-match-safety {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+}

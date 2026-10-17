@@ -244,8 +244,13 @@ export default function App(){
  },[]);
  useEffect(()=>()=>clearTimeout(guideTimer.current),[]);
  useEffect(()=>{setPieceGuide(null);guideTriggered.current=false},[state]);
- useEffect(()=>{
+  const resultIdentity=mode==="online"&&online.match?.id&&result?`${online.match.id}:${result.winner??"draw"}:${result.reason}`:mode!=="online"&&result?`${mode}:${timeline.length}:${result.winner??"draw"}:${result.reason}`:null;
+  const playedFinishRef=useRef(null);
+  useEffect(()=>{
+   if(!resultIdentity){playedFinishRef.current=null;return;}
+   if(playedFinishRef.current===resultIdentity)return;
   if(!result||motionFx)return;
+   playedFinishRef.current=resultIdentity;
   if(!["ema-safe-try","checkmate","no-legal-move"].includes(result.reason)){
    setFinishFxDone(true);setResultRevealReady(true);return;
   }
@@ -867,7 +872,7 @@ export default function App(){
 
     {online.error&&<p role="alert">{online.error}</p>}
    </div>}
-   <div className="result-overlay__actions">{mode==="online"&&savedReturnMode&&<button className="result-overlay__again" onClick={restorePreviousMode}>元のモードに戻る</button>}<button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{backgroundMusic.current?.pause();if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
+   <div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{if(mode==="online"&&savedReturnMode){restorePreviousMode();return;}backgroundMusic.current?.pause();if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
