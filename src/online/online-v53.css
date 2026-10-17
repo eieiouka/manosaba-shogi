@@ -1,0 +1,5 @@
+/* V53: online queue presence and rematch; no board styling changed. */
+.online-waiting-count {color:#eed7ae;font-size:clamp(12px,1.3vw,15px);text-align:center;margin:5px 0 0;}
+.online-rematch-request {display:flex;flex-direction:column;align-items:center;gap:5px;margin:10px 0;}
+.online-rematch-request p {margin:2px 0;font-size:13px;color:#f2d6b0;}
+.online-rematch-request button:disabled {opacity:.65;cursor:default;}

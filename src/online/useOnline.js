@@ -5,9 +5,21 @@ export function useOnline(onMatch,onLobby){
  const [connected,setConnected]=useState(false);
  const [profile,setProfile]=useState(null);
  const [waitEstimateSeconds,setWaitEstimateSeconds]=useState(null);
+ const [waitingCount,setWaitingCount]=useState(null);
  const [status,setStatus]=useState('idle'),[error,setError]=useState(''),[match,setMatch]=useState(null),[now,setNow]=useState(Date.now());
  const ref=useRef({}),callback=useRef(onMatch);callback.current=onMatch;
  useEffect(()=>{const t=setInterval(()=>setNow(Date.now()+(ref.current.offset||0)),50);return()=>{clearInterval(t);ref.current.events?.close()}},[]);
+  useEffect(()=>{
+   let live=true;
+   const poll=async()=>{
+    try{
+     const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),4000);
+     try{const r=await fetch(BASE+'/queue-status',{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error('queue unavailable');const d=await r.json();if(live)setWaitingCount(Number.isInteger(d.waiting)?d.waiting:null)}finally{clearTimeout(timeout)}
+    }catch{if(live)setWaitingCount(null)}
+   };
+   poll();const timer=setInterval(poll,5000);
+   return()=>{live=false;clearInterval(timer)};
+  },[]);
  const playerKey=()=>{try{return localStorage.getItem('manosaba-player-key')||''}catch{return ''}};
  const playerHeaders=()=>({'X-Player-Key':playerKey()});
  async function loadProfile(){
@@ -101,7 +113,8 @@ export function useOnline(onMatch,onLobby){
   try{await post('/cancel');setStatus('idle')}catch(e){setError(e.message)}
  }
  async function move(action){try{await post('/move',{id:match.id,revision:match.revision,action});setError('')}catch(e){setError(e.message)}}
+  async function rematch(){if(!match?.id)return;try{await post('/rematch',{id:match.id});setError('')}catch(e){setError(e.message)}}
  async function resign(){try{await post('/resign',{id:match.id})}catch(e){setError(e.message)}}
  async function resetNickname(){await loadProfile();await saveName('');try{localStorage.removeItem('manosaba-nickname')}catch{throw Error('端末の名前をリセットできませんでした')}setNickname('');return true}
- return {waitEstimateSeconds,profile,loadProfile,resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,editNickname,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
+ return {waitingCount,rematch,waitEstimateSeconds,profile,loadProfile,resetNickname,nickname,connected,status,error,match,now,queue,submitNickname,cancel,move,resign,editNickname,remaining:match?.deadline?Math.max(0,Math.ceil((match.deadline-now)/1000)):20};
 }
