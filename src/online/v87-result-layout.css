@@ -1,0 +1,13 @@
+/* V87: result controls remain within the viewport, without expanding the game stage. */
+.result-overlay { box-sizing:border-box; overflow-y:auto; overscroll-behavior:contain; padding:12px; }
+.result-overlay__panel { box-sizing:border-box; max-height:calc(100dvh - 24px); max-width:min(94vw,560px); overflow-y:auto; }
+.result-overlay__actions { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+.result-overlay__actions > button { flex:1 1 135px; min-width:0; white-space:normal; }
+.auto-match-dialog { max-height:calc(100dvh - 32px); overflow-y:auto; box-sizing:border-box; }
+.auto-match-safety { color:#f5deb0; font-weight:800; }
+.auto-match-actions button { font-size:clamp(12px,3.5vw,17px); padding:10px 5px; }
+@media(max-width:600px) {
+ .result-overlay__panel { padding:12px; }
+ .result-overlay__actions { gap:6px; }
+ .result-overlay__actions > button { flex-basis:100px; }
+}

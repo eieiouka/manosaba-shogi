@@ -18,6 +18,7 @@ import {scriptedStep,scriptedLines,scriptedPlayerMatches,scriptedAutoAction,scri
 import {LearningChapterHeading,LearningDialogue,LearningChapterSelect,LearningBackConfirm} from "./learning/LearningUI.jsx";
 import "./learning/learning.css";
 import "./online/auto-match.css";
+import "./online/v87-result-layout.css";
 
 const randomSide=()=>Math.random()<.5?"sente":"gote";
 const HAND_ORDER=["sherry","hanna","hiro","nanoka","margo"];
@@ -544,7 +545,7 @@ export default function App(){
    let saved=returnSnapshotRef.current;
    if(!saved)try{saved=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')}catch{}
    if(!saved||!['ai','learning'].includes(saved.mode))return;
-   online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);
+   online.leaveMatch();setBackgroundQueueMode(null);setSavedReturnMode(null);
    returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}
    learningGeneration.current++;request.current++;worker.current?.postMessage({type:'reset'});
    clearScene();setMode(saved.mode);setStarted(true);setHumanSide(saved.humanSide);
@@ -843,7 +844,7 @@ export default function App(){
   </div>
   <OnlineLobby online={online} background={Boolean(difficultyPrompt||backgroundQueueMode)} onCpu={()=>startNewMatch(5,true)}/>
   {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);if(!alreadyWaiting)setBackgroundQueueMode(null)}}/>}
-  {autoMatchPrompt&&<div className="auto-match-overlay"><section className="auto-match-dialog" role="dialog" aria-modal="true"><h2>オンライン対戦への自動移行</h2><p>相手が来たら、オンライン対戦に自動移行しますか？</p><p>進行状況は保存されます。</p><div className="auto-match-actions"><button className="auto-match-yes" onClick={()=>chooseAutoMatch(true)}>はい</button><button className="auto-match-no" onClick={()=>chooseAutoMatch(false)}>いいえ</button></div></section></div>}
+  {autoMatchPrompt&&<div className="auto-match-overlay"><section className="auto-match-dialog" role="dialog" aria-modal="true"><h2>対人戦も遊んでみませんか？</h2><p>CPU戦・ラーニングを楽しみながら、対人戦の相手も探せます。</p><p>相手が見つかると自動で対人戦に切り替わります。進行状況は保存され、あとから再開できます。</p><p className="auto-match-safety">級位者は負けてもポイントが減りません！</p><div className="auto-match-actions"><button className="auto-match-yes" onClick={()=>chooseAutoMatch(true)}>対人戦もOK</button><button className="auto-match-no" onClick={()=>chooseAutoMatch(false)}>{(typeof autoMatchPrompt==='object'&&autoMatchPrompt?.kind==='learning-level')||autoMatchPrompt==='learning'?'今はラーニングだけ':'今はCPU戦だけ'}</button></div></section></div>}
  </main>;
 
  return <div className={`app-shell ${mode==="learning"?"app-shell--learning":""}`}>
@@ -866,7 +867,7 @@ export default function App(){
 
     {online.error&&<p role="alert">{online.error}</p>}
    </div>}
-   <div className="result-overlay__actions">{mode==="online"&&savedReturnMode&&<button className="result-overlay__again" onClick={restorePreviousMode}>元のモードに戻る</button>}<button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{backgroundMusic.current?.pause();if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
+   <div className="result-overlay__actions">{mode==="online"&&savedReturnMode&&<button className="result-overlay__again" onClick={restorePreviousMode}>元のモードに戻る</button>}<button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{backgroundMusic.current?.pause();if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
@@ -877,7 +878,7 @@ export default function App(){
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
   {showHowTo&&<HowToPlayDialog onClose={()=>setShowHowTo(false)}/>} 
   {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);if(!alreadyWaiting)setBackgroundQueueMode(null)}}/>}
-  {autoMatchPrompt&&<div className="auto-match-overlay"><section className="auto-match-dialog" role="dialog" aria-modal="true"><h2>オンライン対戦への自動移行</h2><p>相手が来たら、オンライン対戦に自動移行しますか？</p><p>進行状況は保存されます。</p><div className="auto-match-actions"><button className="auto-match-yes" onClick={()=>chooseAutoMatch(true)}>はい</button><button className="auto-match-no" onClick={()=>chooseAutoMatch(false)}>いいえ</button></div></section></div>}
+  {autoMatchPrompt&&<div className="auto-match-overlay"><section className="auto-match-dialog" role="dialog" aria-modal="true"><h2>対人戦も遊んでみませんか？</h2><p>CPU戦・ラーニングを楽しみながら、対人戦の相手も探せます。</p><p>相手が見つかると自動で対人戦に切り替わります。進行状況は保存され、あとから再開できます。</p><p className="auto-match-safety">級位者は負けてもポイントが減りません！</p><div className="auto-match-actions"><button className="auto-match-yes" onClick={()=>chooseAutoMatch(true)}>対人戦もOK</button><button className="auto-match-no" onClick={()=>chooseAutoMatch(false)}>{(typeof autoMatchPrompt==='object'&&autoMatchPrompt?.kind==='learning-level')||autoMatchPrompt==='learning'?'今はラーニングだけ':'今はCPU戦だけ'}</button></div></section></div>}
   </div>;
 }
 
