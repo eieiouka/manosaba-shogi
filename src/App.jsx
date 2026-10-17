@@ -512,21 +512,16 @@ export default function App(){
   setThinking(false);setSelected(null);setHandType(null);setResigned(true);
  }
   const alreadyWaiting=online.status==='queued'||online.status==='connecting';
+  // Learning asks about background matchmaking only when entering from the title.
+  // Moving between sections keeps the existing queue preference unchanged.
   function requestLearningLevel(index){
    if(index<0||index>=LEARNING_LEVELS.length)return;
-   if(alreadyWaiting){chooseLearningLevel(index);return;}
-   setLearningChapterSelect(false);
-   setAutoMatchPrompt({kind:'learning-level',index});
+   chooseLearningLevel(index);
   }
   function chooseAutoMatch(yes){
    const target=autoMatchPrompt;
    setAutoMatchPrompt(null);
    if(!target)return;
-   if(typeof target==='object'&&target.kind==='learning-level'){
-    chooseLearningLevel(target.index);
-    if(yes&&!alreadyWaiting){setBackgroundQueueMode('learning');online.queue('learning');}
-    return;
-   }
    if(typeof target==='object'&&target.kind==='cpu-rematch'){
     if(yes&&!alreadyWaiting){setBackgroundQueueMode('cpu');online.queue('cpu');}
     else if(!alreadyWaiting)setBackgroundQueueMode(null);
