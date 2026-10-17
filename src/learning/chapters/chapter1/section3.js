@@ -3,7 +3,7 @@
 export default {
   "id": "nanoka-3",
   "chapter": "第1章　3節",
-  "title": "三段目の駒はナノカの標的",
+  "title": "三段目の駒はナノカの餌食",
   "setup": null,
   "scenes": [
     {
