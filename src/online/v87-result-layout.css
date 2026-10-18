@@ -11,21 +11,3 @@
  .result-overlay__actions { gap:6px; }
  .result-overlay__actions > button { flex-basis:100px; }
 }
-
-/* V92: taller result backdrop for online rematch controls. Keep it inside board. */
-.result-overlay::before {
-  inset: 8% 3%;
-}
-.result-overlay__panel {
-  width: min(94%, 560px);
-  max-height: calc(100% - 16px);
-  gap: clamp(8px, 1.8vw, 18px);
-  overflow-y: auto;
-}
-.result-overlay__text { text-align:center; }
-.online-rematch-request { margin: 2px 0; max-width:100%; }
-@media (max-width:760px) {
-  .result-overlay::before { inset: 5% 2%; }
-  .result-overlay__panel { padding: 8px; gap: 8px; }
-  .result-overlay__actions { width:100%; }
-}

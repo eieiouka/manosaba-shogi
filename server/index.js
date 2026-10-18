@@ -52,7 +52,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
   }
  };
  const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false;p.queueMode=null;refreshLone()};
- const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames,profiles:Object.fromEntries(m.players.map((p,i)=>[i===0?'sente':'gote',profiles.view(p.profile)])),ratingChanges:m.ratingChanges,rankError:m.rankError,rematch:m.result?{requested:m.rematchVotes?.length||0,mineBySide:{sente:Boolean(m.rematchVotes?.includes(m.players[0].token)),gote:Boolean(m.rematchVotes?.includes(m.players[1].token))},available:m.players.every(connected)&&Date.now()-(m.finishedAt||Date.now())<300000}:null});
+ const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames,profiles:Object.fromEntries(m.players.map((p,i)=>[i===0?'sente':'gote',profiles.view(p.profile)])),ratingChanges:m.ratingChanges,rankError:m.rankError});
  const broadcast=(m,extra={})=>m.players.forEach((p,i)=>send(p,{...snapshot(m),side:i===0?'sente':'gote',...extra}));
  const finish=(m,winner,reason)=>{if(m.result)return;m.result={winner,reason};m.deadline=null;m.readyAt=null;m.paused=false;m.finishedAt=Date.now();updateRanks(m);broadcast(m);history.end(m);refreshLone()};
  const settle=m=>{if(!m.result&&!m.paused&&Date.now()>=m.deadline)finish(m,opposite(m.state.turn),'timeout')};
@@ -60,7 +60,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
  const resume=m=>{if(m.result||!m.paused||m.players.some(p=>!p.stream))return;m.readyAt=Date.now()+m.delay;m.deadline=m.readyAt+m.remaining;m.paused=false;broadcast(m)};
   const createPairMatch=players=>{
    const state=makeInitialState(),readyAt=Date.now()+startDelayMs;
-   const m={id:randomUUID(),startedAt:Date.now(),players,nicknames:{sente:players[0].nickname,gote:players[1].nickname},state,revision:0,result:null,readyAt,deadline:readyAt+turnMs,paused:false,seen:new Map([[key(state),1]]),rematchVotes:[]};
+   const m={id:randomUUID(),startedAt:Date.now(),players,nicknames:{sente:players[0].nickname,gote:players[1].nickname},state,revision:0,result:null,readyAt,deadline:readyAt+turnMs,paused:false,seen:new Map([[key(state),1]])};
    matches.set(m.id,m);history.start(m);players.forEach(p=>p.match=m);broadcast(m);refreshLone();return m;
   };
  const match=()=>{while(queue.length>=2){const a=queue.shift(),b=queue.shift();a.queued=b.queued=false;a.queueMode=b.queueMode=null;a.queueMode=b.queueMode=null;const players=randomInt(2)?[a,b]:[b,a];createPairMatch(players)}refreshLone()};
@@ -184,14 +184,14 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
    if(profile&&[...sessions.values()].some(other=>other!==p&&other.profile?.id===profile.id&&(other.queued||other.match&&!other.match.result))){json(409,{error:'このプロフィールは別の画面で待機・対局中です'});return}
    try{profiles.name(profile,nickname)}catch(e){json(e.code==='nickname-taken'?409:503,{error:e.code==='nickname-taken'?e.message:'プロフィールを保存できません',code:e.code});return}
    p.profile=profile;p.nickname=nickname;p.queueMode=queueMode;p.queueMode=queueMode;
-   if(p.match?.result){const oldMatch=p.match;p.match=null;oldMatch.rematchVotes=[];oldMatch.players.forEach((other,i)=>{if(other!==p&&other.match===oldMatch)send(other,{...snapshot(oldMatch),side:i===0?'sente':'gote'})})}else p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(170,191);p.waitEstimateSeconds=undefined;queue.push(p);waitingEvents.push({sequence:++waitingSequence,nickname:p.nickname,at:Date.now(),busyWatch:[...new Set([...adminActivity.values()].filter(a=>a.active&&Date.now()-a.at<adminActivityTtlMs).map(a=>a.id))]});if(waitingEvents.length>200)waitingEvents.shift();refreshLone()}send(p,{type:'queued'});match();json(200,{ok:true});return;
+   if(p.match?.result){const oldMatch=p.match;p.match=null;oldMatch.players.forEach((other,i)=>{if(other!==p&&other.match===oldMatch)send(other,{...snapshot(oldMatch),side:i===0?'sente':'gote'})})}else p.match=null;if(!p.queued){p.queued=true;p.waitEstimateSeed=randomInt(170,191);p.waitEstimateSeconds=undefined;queue.push(p);waitingEvents.push({sequence:++waitingSequence,nickname:p.nickname,at:Date.now(),busyWatch:[...new Set([...adminActivity.values()].filter(a=>a.active&&Date.now()-a.at<adminActivityTtlMs).map(a=>a.id))]});if(waitingEvents.length>200)waitingEvents.shift();refreshLone()}send(p,{type:'queued'});match();json(200,{ok:true});return;
   }
   if(url.pathname==='/cancel'){removeQueue(p);send(p,{type:'idle'});json(200,{ok:true});return}
   if(url.pathname==='/leave-match'){
    const leaving=p.match;
    if(!leaving||body.id!==leaving.id){json(200,{ok:true});return}
    if(!leaving.result){json(409,{error:'対局中は退出できません'});return}
-   p.match=null;leaving.rematchVotes=[];
+   p.match=null;
    send(p,{type:'idle'});
    leaving.players.forEach((other,i)=>{
     if(other!==p&&other.match===leaving)send(other,{...snapshot(leaving),side:i===0?'sente':'gote'});
@@ -199,21 +199,6 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
    json(200,{ok:true});return;
   }
   const m=p.match;if(!m||body.id!==m.id){json(409,{error:'対局がありません'});return}settle(m);
-   if(url.pathname==='/rematch'){
-    if(!m.result){json(409,{error:'対局終了後に再戦できます'});return}
-    if(Date.now()-(m.finishedAt||0)>300000){json(409,{error:'再戦受付が終了しました'});return}
-    if(!m.players.every(connected)||m.players.some(player=>player.match!==m||player.queued)){
-     json(409,{error:'相手が退出しています'});return;
-    }
-    m.rematchVotes??=[];
-    if(!m.rematchVotes.includes(p.token))m.rematchVotes.push(p.token);
-    if(m.rematchVotes.length===2){
-     // Swap sides. Each match receives its own ID and is recorded independently.
-     const players=[m.players[1],m.players[0]];
-     createPairMatch(players);
-    }else broadcast(m);
-    json(200,{ok:true});return;
-   }
   if(m.result){json(409,{error:'対局は終了しました'});return}
   const side=m.players[0]===p?'sente':'gote';
   if(url.pathname==='/resign'){finish(m,opposite(side),'resign');json(200,{ok:true});return}
