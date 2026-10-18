@@ -137,13 +137,9 @@ export default function App(){
   setWaitingCpu(false);setDifficultyPrompt(null);setMode("online");setHumanSide(data.side);setThinking(false);setSelected(null);setHandType(null);setResigned(false);
   if(!started||mode!=="online"||online.match?.id!==data.id){
    setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);motionFxRef.current=null;
-   if(!backgroundMusic.current){backgroundMusic.current=new Audio("/audio/新BGM.mp3");backgroundMusic.current.loop=true}
-   backgroundMusic.current.volume=.3;backgroundMusic.current.play().catch(()=>{});
   }
   setTimeline([data.state]);setStarted(true);
  },()=>{
-  if(!backgroundMusic.current){backgroundMusic.current=new Audio("/audio/新BGM.mp3");backgroundMusic.current.loop=true}
-  backgroundMusic.current.volume=.3;backgroundMusic.current.play().catch(()=>{});
  });
  const result=useMemo(()=>mode==="online"?online.match?.result:terminalResult(state)??repetitionResult(state,timeline),[state,timeline,mode,online.match]);
  const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
@@ -235,6 +231,30 @@ export default function App(){
  },[guideActions,activeGuide,state]);
 
  useEffect(()=>{worker.current=new Worker(new URL("./game/ai.worker.js",import.meta.url),{type:"module"});return()=>worker.current?.terminate()},[]);
+  // BGM is selected from the visible game mode, not from queue status alone.
+  // A CPU/learning game that is waiting for a human keeps its own music.
+  const bgmTrack = started
+    ? mode === "online" ? "/audio/新BGM.mp3"
+      : mode === "learning" ? "/audio/learning-bgm.mp3"
+      : "/audio/Flutter.mp3"
+    : (online.status === "queued" || online.status === "connecting")
+      ? "/audio/さみしいおばけと東京の月.mp3" : null;
+  useEffect(()=>{
+    const current=backgroundMusic.current;
+    if(!bgmTrack){
+      if(current){current.pause();current.currentTime=0;current.src="";backgroundMusic.current=null;}
+      return;
+    }
+    if(current?.datasetTrack===bgmTrack)return;
+    if(current){current.pause();current.currentTime=0;}
+    const audio=new Audio(bgmTrack);
+    audio.datasetTrack=bgmTrack;
+    audio.loop=true;
+    audio.volume=bgmTrack==="/audio/learning-bgm.mp3"?.45:.3;
+    backgroundMusic.current=audio;
+    audio.play().catch(()=>{});
+    return ()=>{audio.pause();audio.currentTime=0;if(backgroundMusic.current===audio)backgroundMusic.current=null;};
+  },[bgmTrack]);
  useEffect(()=>()=>{backgroundMusic.current?.pause();backgroundMusic.current=null},[]);
  useEffect(()=>{
   const query=window.matchMedia(MOBILE_LAYOUT_QUERY);
@@ -549,22 +569,12 @@ export default function App(){
     sceneSnapshots.current=saved.sceneSnapshots||[];scenePlayerSnapshots.current=saved.scenePlayerSnapshots||[];
     setLearningChapterSelect(false);setConfirmLearningBack(false);
    }
-   backgroundMusic.current?.pause();backgroundMusic.current=new Audio(saved.mode==='learning'?'/audio/learning-bgm.mp3':'/audio/新BGM.mp3');
-   backgroundMusic.current.loop=true;backgroundMusic.current.volume=saved.mode==='learning'?.45:.3;
-   backgroundMusic.current.play().catch(()=>{});
   }
  async function startNewMatch(depth,cpuWhileWaiting=false){
   setWaitingCpu(cpuWhileWaiting);
   setMode("ai");
   request.current++;
   worker.current?.postMessage({type:"reset"});
-  if(!backgroundMusic.current){
-   backgroundMusic.current=new Audio("/audio/新BGM.mp3");
-   backgroundMusic.current.loop=true;
-  }
-  backgroundMusic.current.volume = 0.3; // 30%
-  backgroundMusic.current.currentTime=0;
-  backgroundMusic.current.play().catch(error=>console.error("BGMの再生に失敗しました:",error));
   motionFxRef.current=null;setDifficultyDepth(depth);setDifficultyPrompt(null);setHumanSide(randomSide());setTimeline([makeInitialState()]);setSelected(null);setHandType(null);setThinking(false);setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);setStarted(true);
  }
  function startLearning(){
@@ -576,11 +586,6 @@ export default function App(){
   setSelected(null);setHandType(null);setThinking(false);setResigned(false);
   setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);motionFxRef.current=null;
   setLearningDialogue(0);setLearningHistory([]);setLearningOutcome(null);setLearningChapterSelect(false);setConfirmLearningBack(false);setStarted(true);
-  backgroundMusic.current?.pause();
-  backgroundMusic.current=new Audio("/audio/learning-bgm.mp3");
-  backgroundMusic.current.loop=true;backgroundMusic.current.volume=.45;
-  backgroundMusic.current.playbackRate=1; // ラーニングBGMは通常速度
-  backgroundMusic.current.play().catch(()=>{});
  }
  function restoreLearningLevel(levelIndex=learningLevelIndex){
   clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
@@ -851,7 +856,7 @@ export default function App(){
   <main className="game-stage">
    <Hand className="hand--opponent" title="相手の持ち駒" pieces={visibleHand(opponentSide)} disabled activeType={null} onPick={()=>{}} perspective={humanSide} reverse onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${activeGuide?.row===r&&activeGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${showCpuInvite?"result-overlay--cpu-invite":""} ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div>{showCpuInvite&&<><p className="result-overlay__invite">強いですね！対人戦もやってみませんか？</p><button className="result-overlay__again result-overlay__online" disabled={online.status==="connecting"||online.status==="queued"} onClick={()=>{setStarted(false);online.queue()}}>対人戦</button></>}
-   <div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{if(mode==="online"&&savedReturnMode){restorePreviousMode();return;}backgroundMusic.current?.pause();if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
+   <div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{if(mode==="online"&&savedReturnMode){restorePreviousMode();return;}if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
