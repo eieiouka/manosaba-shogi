@@ -20,6 +20,25 @@ import "./learning/learning.css";
 import "./online/auto-match.css";
 import "./online/v87-result-layout.css";
 
+// Anonymous, browser-scoped hourly analytics. Server accepts mode and kind separately.
+const ANALYTICS_URL=(import.meta.env.VITE_MATCH_SERVER_URL||"http://localhost:3001").replace(/\/$/,"")+"/analytics/event";
+function getAnalyticsBrowserId(){
+ try{
+  let id=localStorage.getItem("manosaba-analytics-browser-id");
+  if(!id||!/^[0-9a-f-]{36}$/i.test(id)){
+   id=crypto.randomUUID();localStorage.setItem("manosaba-analytics-browser-id",id);
+  }
+  return id;
+ }catch{return crypto.randomUUID()}
+}
+function sendAnalytics(mode,kind){
+ const id=getAnalyticsBrowserId();
+ fetch(ANALYTICS_URL,{method:"POST",headers:{"Content-Type":"application/json"},
+  body:JSON.stringify({id,mode,kind}),keepalive:true}).then(response=>{
+   if(!response.ok)console.warn("[analytics] event rejected",mode,kind,response.status);
+  }).catch(error=>console.warn("[analytics] event failed",mode,kind,error));
+}
+
 const randomSide=()=>Math.random()<.5?"sente":"gote";
 const HAND_ORDER=["sherry","hanna","hiro","nanoka","margo"];
 const DIFFICULTIES=[
@@ -93,6 +112,9 @@ function HowToPlayDialog({onClose}){
 export default function App(){
  const initial=useMemo(()=>makeInitialState(),[]);
  const [started,setStarted]=useState(false);
+  const [cpuStarts,setCpuStarts]=useState(0);
+  const [learningStarts,setLearningStarts]=useState(0);
+
  const [mode,setMode]=useState("ai");
   const {confirmLearningBack,setConfirmLearningBack,learningDialogue,setLearningDialogue,learningLevelIndex,setLearningLevelIndex,learningHistory,setLearningHistory,learningOutcome,setLearningOutcome,learningChapterSelect,setLearningChapterSelect,learningGeneration}=useLearningState();
  const [humanSide,setHumanSide]=useState("sente");
@@ -147,6 +169,35 @@ export default function App(){
  useCpuPresence(started&&mode==="ai"&&!gameOver);
  useLearningPresence(started&&mode==="learning");
  useAdminActivity(started&&!gameOver);
+  // Each mode counts starts, while presence continues every minute (also across hour boundaries).
+  const cpuActive=started&&mode==="ai"&&!gameOver;
+  const learningActive=started&&mode==="learning";
+  const queueActive=online.status==="queued";
+  const onlineMatchId=mode==="online"&&online.match?.id?online.match.id:null;
+  const analyticsPrev=useRef({cpu:null,learning:null,queue:false,online:null});
+  useEffect(()=>{
+    const prev=analyticsPrev.current;
+    const cpuKey=cpuActive?cpuStarts:null;
+    const learningKey=learningActive?learningStarts:null;
+    if(cpuKey!==null&&prev.cpu!==cpuKey)sendAnalytics("cpu","start");
+    if(learningKey!==null&&prev.learning!==learningKey)sendAnalytics("learning","start");
+    if(queueActive&&!prev.queue)sendAnalytics("queue","start");
+    if(onlineMatchId&&prev.online!==onlineMatchId)sendAnalytics("online","start");
+    prev.cpu=cpuKey;prev.learning=learningKey;prev.queue=queueActive;prev.online=onlineMatchId;
+  },[cpuActive,cpuStarts,learningActive,learningStarts,queueActive,onlineMatchId]);
+  useEffect(()=>{
+    if(!cpuActive&&!learningActive&&!queueActive&&!onlineMatchId)return;
+    const sendPresence=()=>{
+      if(cpuActive)sendAnalytics("cpu","presence");
+      if(learningActive)sendAnalytics("learning","presence");
+      if(queueActive)sendAnalytics("queue","presence");
+      if(onlineMatchId)sendAnalytics("online","presence");
+    };
+    sendPresence();
+    const timer=setInterval(sendPresence,60000);
+    return()=>clearInterval(timer);
+  },[cpuActive,learningActive,queueActive,onlineMatchId]);
+
   const openingActive=useMemo(()=>timeline.every((position,i)=>{
     if(i===0)return true;
     const previous=timeline[i-1];
@@ -568,6 +619,7 @@ export default function App(){
    }
   }
  async function startNewMatch(depth,cpuWhileWaiting=false){
+   setCpuStarts(n=>n+1);
   setWaitingCpu(cpuWhileWaiting);
   setMode("ai");
   request.current++;
@@ -575,6 +627,7 @@ export default function App(){
   motionFxRef.current=null;setDifficultyDepth(depth);setDifficultyPrompt(null);setHumanSide(randomSide());setTimeline([makeInitialState()]);setSelected(null);setHandType(null);setThinking(false);setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);setStarted(true);
  }
  function startLearning(){
+   setLearningStarts(n=>n+1);
   clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
   learningGeneration.current++;
   setLearningLevelIndex(0);
@@ -704,6 +757,7 @@ export default function App(){
  }
  function chooseLearningLevel(index){
   if(index<0||index>=LEARNING_LEVELS.length)return;
+  setLearningStarts(n=>n+1);
   restoreLearningLevel(index);
   setLearningLevelIndex(index);
   setLearningDialogue(0);
