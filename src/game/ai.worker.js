@@ -1,4 +1,5 @@
 import {bestAction,createTranspositionTable} from "./aiEngine.js";
+import {generateAllLegalActions} from "./rules.js";
 import {fairyMoveToAction,stateToFairyFen} from "./fairyCodec.js";
 
 const sharedTT=createTranspositionTable();
@@ -96,7 +97,35 @@ self.onmessage=async({data})=>{
     const timeLimitMs=Math.max(500,data.timeLimitMs??500);
     const minDepth=Math.max(1,Math.min(targetDepth,31,Math.trunc(Number(data.minDepth)||15)));
     const startedAt=performance.now();
-    const result=await runEngine(data.state,data.seen,targetDepth,timeLimitMs,minDepth,0);
+    // Opening uses the numeric root search, where each specified move receives a small
+    // score adjustment. Outside the opening, preserve the normal Fairy/WASM selection.
+    // First CPU move: develop Nanoka, unless the opponent just jumped Hanna two squares.
+    // A forced move is selected only from the authoritative legal-action list.
+    const firstCpuTurn=data.openingActive&&data.cpuOwnMoves===0;
+    const ownSide=data.state.turn;
+    const opponent=ownSide==="sente"?"gote":"sente";
+    const opponentHannaJump=data.state.board.some((line,r)=>line.some((piece,c)=>{
+      if(piece?.side!==opponent||piece.type!=="hanna")return false;
+      const homeRow=opponent==="sente"?5:0;
+      const homeCol=opponent==="sente"?1:4;
+      return c===homeCol&&Math.abs(r-homeRow)===2;
+    }));
+    if(firstCpuTurn&&!opponentHannaJump){
+      const from=ownSide==="sente"?[5,0]:[0,5];
+      const to=ownSide==="sente"?[4,0]:[1,5];
+      const forced=generateAllLegalActions(data.state).find(a=>a.piece?.type==="nanoka"&&a.from?.[0]===from[0]&&a.from?.[1]===from[1]&&a.to?.[0]===to[0]&&a.to?.[1]===to[1]);
+      if(forced){
+        console.info("[定石AI] 初手ナノカ前進",forced);
+        self.postMessage({id:data.id,result:{action:forced,score:0,depth:0,nodes:0,engine:"opening-first-move"}});
+        return;
+      }
+    }
+    const result=data.openingActive
+      ? bestAction(data.state,data.seen,Math.min(targetDepth,9),{
+          timeLimitMs, minDepth:Math.min(minDepth,5),tt:sharedTT,openingActive:true,cpuOwnMoves:data.cpuOwnMoves??0
+        })
+      : await runEngine(data.state,data.seen,targetDepth,timeLimitMs,minDepth,0);
+    if(data.openingActive&&result?.openingDebug)console.info("[定石AI] 候補比較 (raw/bonus/adjusted)",result.openingDebug);
     const elapsed=Math.max(1,performance.now()-startedAt);
     const nps=result?.nodes?Math.round(result.nodes*1000/elapsed):"?";
     console.info(`[魔法将棋AI] engine=${result?.engine??"javascript"} depth=${result?.depth??"?"} nodes=${result?.nodes??"?"} elapsed=${Math.round(elapsed)}ms nps=${nps}`);

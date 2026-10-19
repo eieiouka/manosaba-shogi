@@ -15,7 +15,7 @@ function xorBoard(p,i,v){if(!v)return;p.h1^=Z1[i][zi(v)];p.h2^=Z2[i][zi(v)]}
 function setSq(p,i,v){const old=p.b[i];xorBoard(p,i,old);p.b[i]=v;xorBoard(p,i,v)}
 function setHand(p,side,t,n){const k=hi(side,t),old=Math.min(7,p.h[k]);p.h1^=H1[k][old];p.h2^=H2[k][old];p.h[k]=n;const nn=Math.min(7,n);p.h1^=H1[k][nn];p.h2^=H2[k][nn]}
 function flip(p){p.turn=-p.turn;p.h1^=ZT1;p.h2^=ZT2}
-export function fromState(s){const p={b:new Int8Array(36),h:new Uint8Array(12),turn:s.turn==="sente"?SENTE:GOTE,ema:new Int8Array([-1,-1]),h1:0,h2:0};for(let r=0;r<6;r++)for(let c=0;c<6;c++){const q=s.board[r][c];if(!q)continue;const v=code(q.side==="sente"?SENTE:GOTE,q.type,q.promoted);p.b[idx(r,c)]=v;if(q.type==="ema")p.ema[q.side==="sente"?0:1]=idx(r,c)}for(const side of["sente","gote"])for(const q of s.hands[side])p.h[hi(side==="sente"?SENTE:GOTE,TYPES[q.type])]++;for(let i=0;i<36;i++)xorBoard(p,i,p.b[i]);for(let k=0;k<12;k++){p.h1^=H1[k][Math.min(7,p.h[k])];p.h2^=H2[k][Math.min(7,p.h[k])]}if(p.turn===GOTE){p.h1^=ZT1;p.h2^=ZT2}return p}
+export function fromState(s){const p={b:new Int8Array(36),h:new Uint8Array(12),turn:s.turn==="sente"?SENTE:GOTE,ema:new Int8Array([-1,-1]),captures:0,cpuMoves:0,cpuSide:0,h1:0,h2:0};for(let r=0;r<6;r++)for(let c=0;c<6;c++){const q=s.board[r][c];if(!q)continue;const v=code(q.side==="sente"?SENTE:GOTE,q.type,q.promoted);p.b[idx(r,c)]=v;if(q.type==="ema")p.ema[q.side==="sente"?0:1]=idx(r,c)}for(const side of["sente","gote"])for(const q of s.hands[side])p.h[hi(side==="sente"?SENTE:GOTE,TYPES[q.type])]++;for(let i=0;i<36;i++)xorBoard(p,i,p.b[i]);for(let k=0;k<12;k++){p.h1^=H1[k][Math.min(7,p.h[k])];p.h2^=H2[k][Math.min(7,p.h[k])]}if(p.turn===GOTE){p.h1^=ZT1;p.h2^=ZT2}return p}
 const hash=p=>`${p.h1>>>0}:${p.h2>>>0}`;
 export class NumericTranspositionTable{
   constructor(power=19){this.n=1<<power;this.mask=this.n-1;this.k1=new Uint32Array(this.n);this.k2=new Uint32Array(this.n);this.value=new Int32Array(this.n);this.move=new Uint32Array(this.n);this.depth=new Uint8Array(this.n);this.ext=new Uint8Array(this.n);this.flag=new Uint8Array(this.n);this.used=new Uint8Array(this.n);this.count=0}
@@ -40,13 +40,15 @@ function pseudo(p,from,attacksOnly=false){const v=p.b[from],side=sideOf(v),t=typ
   return out}
 function attacks(p,side,sq){for(let i=0;i<36;i++){const v=p.b[i];if(!v||sideOf(v)!==side)continue;for(const m of pseudo(p,i,true)){if(m.capture===sq||(m.kind===0&&m.to===sq&&p.b[sq]&&sideOf(p.b[sq])!==side))return true}}return false}
 function inCheck(p,side){const e=p.ema[side===SENTE?0:1];return e<0||attacks(p,-side,e)}
-function make(p,m){const u={turn:p.turn,h1:p.h1,h2:p.h2,ema0:p.ema[0],ema1:p.ema[1],from:m.from,to:m.to,fromV:m.from>=0?p.b[m.from]:0,toV:p.b[m.to],cap:m.capture,capV:m.capture>=0?p.b[m.capture]:0,hand:-1,handN:0};const side=p.turn;
+function make(p,m){const u={turn:p.turn,h1:p.h1,h2:p.h2,ema0:p.ema[0],ema1:p.ema[1],from:m.from,to:m.to,fromV:m.from>=0?p.b[m.from]:0,toV:p.b[m.to],cap:m.capture,capV:m.capture>=0?p.b[m.capture]:0,captures:p.captures,cpuMoves:p.cpuMoves,hand:-1,handN:0};const side=p.turn;
   if(m.kind===4){const k=hi(side,m.type);u.hand=k;u.handN=p.h[k];setHand(p,side,m.type,p.h[k]-1);setSq(p,m.to,side*m.type)}
   else{const moving=p.b[m.from],t=typeOf(moving);if(m.kind===2){setSq(p,m.from,p.b[m.to]);setSq(p,m.to,m.promote?side*(t|PROMO):moving);if(typeOf(p.b[m.from])===4)p.ema[sideOf(p.b[m.from])===SENTE?0:1]=m.from}
     else if(m.kind===1){const q=p.b[m.capture];if(q&&typeOf(q)!==4){const k=hi(side,typeOf(q));setHand(p,side,typeOf(q),p.h[k]+1)}setSq(p,m.capture,0)}
     else{if(m.capture>=0){const q=p.b[m.capture];if(q&&typeOf(q)!==4){const k=hi(side,typeOf(q));setHand(p,side,typeOf(q),p.h[k]+1)}setSq(p,m.capture,0)}setSq(p,m.from,0);setSq(p,m.to,m.promote?side*(t|PROMO):moving);if(t===4)p.ema[side===SENTE?0:1]=m.to}}
+  if(m.capture>=0&&u.capV)p.captures++;
+  if(side===p.cpuSide)p.cpuMoves++;
   flip(p);return u}
-function undo(p,u){p.turn=u.turn;p.h1=u.h1;p.h2=u.h2;p.ema[0]=u.ema0;p.ema[1]=u.ema1;p.b[u.to]=u.toV;if(u.from>=0)p.b[u.from]=u.fromV;if(u.cap>=0)p.b[u.cap]=u.capV;if(u.hand>=0)p.h[u.hand]=u.handN;else{for(let k=0;k<12;k++){} /* hashes restored above; captured hand count restored below */}
+function undo(p,u){p.cpuMoves=u.cpuMoves;p.captures=u.captures;p.turn=u.turn;p.h1=u.h1;p.h2=u.h2;p.ema[0]=u.ema0;p.ema[1]=u.ema1;p.b[u.to]=u.toV;if(u.from>=0)p.b[u.from]=u.fromV;if(u.cap>=0)p.b[u.cap]=u.capV;if(u.hand>=0)p.h[u.hand]=u.handN;else{for(let k=0;k<12;k++){} /* hashes restored above; captured hand count restored below */}
   // A capture changes exactly one hand count; recover counts from the restored board delta.
   if(u.from>=0&&u.cap>=0&&u.capV&&typeOf(u.capV)!==4){const k=hi(u.turn,typeOf(u.capV));p.h[k]--}
 }
@@ -57,8 +59,8 @@ function movedPieceAttacks(p,to){if(!p.b[to])return false;for(const m of pseudo(
 function generateForcing(p){const out=[];for(const m of generate(p)){if(tactical(p,m)){out.push(m);continue}const u=make(p,m),threat=movedPieceAttacks(p,m.to);undo(p,u);if(threat)out.push({...m,threatMove:true})}return out}
 function terminal(p,moves){for(const side of[SENTE,GOTE]){const e=p.ema[side===SENTE?0:1];if(e>=0&&lastRank(side,row(e))&&!inCheck(p,side))return{winner:side,reason:"try"}}if(moves.length===0)return{winner:-p.turn,reason:inCheck(p,p.turn)?"mate":"no-move"};return null}
 const progress=(a,h)=>[0,h>=4?-120:20,h>=3?-40:90,200,560,1200][a]??1200;
-function evaluate(p){let count=0,hs=0,hg=0;for(let i=0;i<36;i++){if(p.b[i])count++;if(row(i)===5&&p.b[i]>0)hs++;if(row(i)===0&&p.b[i]<0)hg++}const opening=count>=10;let material=0,hand=0,dev=0,promo=0,center=0,prog=0,lock=0,guard=0,finish=0,fixed=0;
-  for(let i=0;i<36;i++){const v=p.b[i];if(!v)continue;const s=sideOf(v),t=typeOf(v),r=row(i),c=col(i),a=s===SENTE?5-r:r,cent=5-Math.trunc((Math.abs(r*2-5)+Math.abs(c*2-5))/2);if(t===4){prog+=s*progress(a,s===SENTE?hs:hg);const rr=r+2*(s===SENTE?-1:1);if(rr>=0&&rr<6){const q=p.b[idx(rr,c)];if(q&&sideOf(q)!==s&&(typeOf(q)===2||typeOf(q)===6))lock+=sideOf(q)*(typeOf(q)===6?220:170)}}else{material+=s*(opening?BO[t]:BM[t]);dev+=s*a*14;if(opening&&t===2)dev+=s*a*18;if(opening&&t===5)dev+=s*a*14;center+=s*cent*6;if(promoted(v))promo+=s*190}fixed+=t===4?0:s*(PV[t]+(promoted(v)?25:0))}
+function evaluate(p,ctx=null){let count=0,hs=0,hg=0;for(let i=0;i<36;i++){if(p.b[i])count++;if(row(i)===5&&p.b[i]>0)hs++;if(row(i)===0&&p.b[i]<0)hg++}const opening=count>=10;let material=0,hand=0,dev=0,promo=0,center=0,prog=0,lock=0,guard=0,finish=0,fixed=0;
+  for(let i=0;i<36;i++){const v=p.b[i];if(!v)continue;const s=sideOf(v),t=typeOf(v),r=row(i),c=col(i),a=s===SENTE?5-r:r,cent=5-Math.trunc((Math.abs(r*2-5)+Math.abs(c*2-5))/2);if(t===4){if(!(ctx?.zeroEmmaProgress&&s===ctx.cpuSide&&p.cpuMoves<=3))prog+=s*progress(a,s===SENTE?hs:hg);const rr=r+2*(s===SENTE?-1:1);if(rr>=0&&rr<6){const q=p.b[idx(rr,c)];if(q&&sideOf(q)!==s&&(typeOf(q)===2||typeOf(q)===6))lock+=sideOf(q)*(typeOf(q)===6?220:170)}}else{material+=s*(opening?BO[t]:BM[t]);dev+=s*a*14;if(opening&&t===2)dev+=s*a*18;if(opening&&t===5)dev+=s*a*14;center+=s*cent*6;if(promoted(v))promo+=s*190}fixed+=t===4?0:s*(PV[t]+(promoted(v)?25:0))}
   for(let i=0;i<36;i++){const v=p.b[i];if(!v||promoted(v)||typeOf(v)===4)continue;const s=sideOf(v),t=typeOf(v),r=row(i),c=col(i),d=s===SENTE?-1:1,rr=r+d;if(rr<0||rr>=6)continue;const q=p.b[idx(rr,c)];if(!q||sideOf(q)!==s)continue;if(t===2){const r2=r+2*d;if(r2>=0&&r2<6&&!p.b[idx(r2,c)])continue}const cost=[0,75,85,65,0,95,60][t];dev-=s*cost*(opening?2:1)*(typeOf(q)===4?2:1)}
   for(const side of[SENTE,GOTE])for(let t=1;t<=6;t++){const n=p.h[hi(side,t)];hand+=side*HV[t]*n;fixed+=side*PV[t]*n}for(const side of[SENTE,GOTE]){const e=p.ema[side===SENTE?0:1];if(e<0)continue;const er=row(e),ec=col(e);for(let i=0;i<36;i++){const v=p.b[i];if(!v)continue;const d=Math.max(Math.abs(row(i)-er),Math.abs(col(i)-ec));if(d===1&&sideOf(v)===side&&typeOf(v)!==4)guard+=side*45;if(d<=2&&sideOf(v)!==side&&(typeOf(v)===2||typeOf(v)===6))finish+=sideOf(v)*(typeOf(v)===6?70:55)}}
   const pressure=side=>{const e=p.ema[side===SENTE?0:1];if(e<0)return 1000;let n=0,er=row(e),ec=col(e);for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;const rr=er+dr,cc=ec+dc;if(!inside(rr,cc))continue;const v=p.b[idx(rr,cc)];if(v&&sideOf(v)!==side)n+=typeOf(v)===6?4:(typeOf(v)===2||typeOf(v)===1?3:2)}return n};fixed=Math.trunc(fixed/2);const x=[material/500,hand/500,dev/300,promo/300,center/200,prog/600,lock/250,guard/250,finish/300,fixed/300,pressure(GOTE)/5,-pressure(SENTE)/5,1],raw=BIAS+W.reduce((n,w,i)=>n+w*x[i],0);return Math.max(-50000,Math.min(50000,Math.round(raw*1000)))}
@@ -68,7 +70,7 @@ export function isNumericTryCritical(s){const p=fromState(s);for(const side of[S
 const moveSig=m=>((m.from+1)&63)|(m.to<<6)|(m.kind<<12)|((m.capture+1)<<15)|((m.promote?1:0)<<21)|((m.type??0)<<22);
 function tick(ctx){ctx.nodes++;if((ctx.nodes&511)===0&&performance.now()>=ctx.deadline)throw TIMEOUT}
 function tactical(p,m){return m.capture>=0||m.kind===1||typeOf(p.b[m.from])===4&&lastRank(p.turn,row(m.to))}
-function evalPos(p,ctx){return evaluate(p)}
+function evalPos(p,ctx){return evaluate(p,ctx)}
 function tryCriticalPos(p){for(const side of[SENTE,GOTE]){const e=p.ema[side===SENTE?0:1];if(e>=0&&((side===SENTE&&row(e)<=2)||(side===GOTE&&row(e)>=3)))return true}return false}
 function tryRelated(p,m,radius){if(m.from>=0&&typeOf(p.b[m.from])===4)return true;for(const e of p.ema){if(e<0)continue;const near=sq=>sq>=0&&Math.max(Math.abs(row(sq)-row(e)),Math.abs(col(sq)-col(e)))<=radius;if(near(m.to)||near(m.from)||near(m.capture))return true}return false}
 function qsearch(p,d,a,b,ctx,fullReply=false){
@@ -90,10 +92,69 @@ function qsearch(p,d,a,b,ctx,fullReply=false){
   }
   return best
 }
-function search(p,d,a,b,ctx,ext=2){tick(ctx);const a0=a,b0=b,old=ctx.tt.lookup(p,d,ext);if(old){if(old.f===0)return old.v;if(old.f===1)a=Math.max(a,old.v);else b=Math.min(b,old.v);if(a>=b)return old.v}const moves=generate(p),end=terminal(p,moves);if(end){const base=end.reason==="try"?1000000:900000,v=(end.winner===SENTE?1:-1)*(base+d);ctx.tt.store(p,d,ext,v,0,0);return v}if(d<=0)return qsearch(p,ctx.qDepth,a,b,ctx);const max=p.turn===SENTE,crit=tryCriticalPos(p),preferred=old?.m??0,ranked=[];for(const m of moves){const sig=moveSig(m),u=make(p,m),v=evalPos(p,ctx);undo(p,u);ranked.push([m,v,sig])}ranked.sort((x,y)=>max?y[1]-x[1]:x[1]-y[1]);ranked.forEach((x,i)=>x.push(i));ranked.sort((x,y)=>{if(x[2]===preferred)return-1;if(y[2]===preferred)return 1;if(x[3]<3||y[3]<3)return x[3]-y[3];const hx=ctx.history.get(x[2])??0,hy=ctx.history.get(y[2])??0;return hy-hx||x[3]-y[3]});let best=max?-INF:INF,bestM=0,i=0,first=true;for(const[m,,sig]of ranked){const isTac=tactical(p,m),radius=ext===1?1:2,willCrit=m.from>=0&&typeOf(p.b[m.from])===4&&((p.turn===SENTE&&row(m.to)<=2)||(p.turn===GOTE&&row(m.to)>=3)),extend=ext>0&&(crit||willCrit)&&tryRelated(p,m,radius),red=0,nextD=d-1+(extend?1:0),nextE=ext-(extend?1:0),u=make(p,m);let v;if(first)v=search(p,nextD,a,b,ctx,nextE);else if(max){v=search(p,nextD-red,a,a+1,ctx,nextE);if(red&&v>a)v=search(p,nextD,a,a+1,ctx,nextE);if(v>a&&v<b)v=search(p,nextD,a,b,ctx,nextE)}else{v=search(p,nextD-red,b-1,b,ctx,nextE);if(red&&v<b)v=search(p,nextD,b-1,b,ctx,nextE);if(v<b&&v>a)v=search(p,nextD,a,b,ctx,nextE)}undo(p,u);first=false;if((max&&v>best)||(!max&&v<best)){best=v;bestM=sig}if(max){if(best>a)a=best}else if(best<b)b=best;if(b<=a){if(!isTac)ctx.history.set(sig,(ctx.history.get(sig)??0)+d*d);break}i++}ctx.tt.store(p,d,ext,best,best<=a0?2:best>=b0?1:0,bestM);return best}
-function root(p,depth,ctx,seen,a=-INF,b=INF){const max=p.turn===SENTE,fav=max?evalPos(p,ctx)>0:evalPos(p,ctx)<0,moves=generate(p),ranked=[],choices=[],preferred=ctx.rootBest;for(const m of moves){const sig=moveSig(m),u=make(p,m),v=evalPos(p,ctx);undo(p,u);ranked.push([m,v,sig])}ranked.sort((x,y)=>{if(x[2]===preferred)return-1;if(y[2]===preferred)return 1;return max?y[1]-x[1]:x[1]-y[1]});let first=true;for(const[m,,sig]of ranked){tick(ctx);const u=make(p,m);let v;if(first)v=search(p,depth-1,a,b,ctx);else if(max){v=search(p,depth-1,a,a+1,ctx);if(v>a&&v<b)v=search(p,depth-1,a,b,ctx)}else{v=search(p,depth-1,b-1,b,ctx);if(v<b&&v>a)v=search(p,depth-1,a,b,ctx)}const rep=seen.has(hash(p));undo(p,u);first=false;choices.push({move:m,score:v,repeats:rep,sig});if(max)a=Math.max(a,v);else b=Math.min(b,v)}const pool=fav&&choices.some(x=>!x.repeats)?choices.filter(x=>!x.repeats):choices;pool.sort((x,y)=>max?y.score-x.score:x.score-y.score);const result=pool[0]??null;if(result)ctx.rootBest=result.sig;return result}
+function search(p,d,a,b,ctx,ext=2){tick(ctx);const a0=a,b0=b,old=ctx.openingActive?null:ctx.tt.lookup(p,d,ext);if(old){if(old.f===0)return old.v;if(old.f===1)a=Math.max(a,old.v);else b=Math.min(b,old.v);if(a>=b)return old.v}const moves=generate(p),end=terminal(p,moves);if(end){const base=end.reason==="try"?1000000:900000,v=(end.winner===SENTE?1:-1)*(base+d);if(!ctx.openingActive)ctx.tt.store(p,d,ext,v,0,0);return v}if(d<=0)return qsearch(p,ctx.qDepth,a,b,ctx);const max=p.turn===SENTE,crit=tryCriticalPos(p),preferred=old?.m??0,ranked=[];for(const m of moves){const sig=moveSig(m),u=make(p,m),v=evalPos(p,ctx);undo(p,u);ranked.push([m,v,sig])}ranked.sort((x,y)=>max?y[1]-x[1]:x[1]-y[1]);ranked.forEach((x,i)=>x.push(i));ranked.sort((x,y)=>{if(x[2]===preferred)return-1;if(y[2]===preferred)return 1;if(x[3]<3||y[3]<3)return x[3]-y[3];const hx=ctx.history.get(x[2])??0,hy=ctx.history.get(y[2])??0;return hy-hx||x[3]-y[3]});let best=max?-INF:INF,bestM=0,i=0,first=true;for(const[m,,sig]of ranked){const isTac=tactical(p,m),radius=ext===1?1:2,willCrit=m.from>=0&&typeOf(p.b[m.from])===4&&((p.turn===SENTE&&row(m.to)<=2)||(p.turn===GOTE&&row(m.to)>=3)),extend=ext>0&&(crit||willCrit)&&tryRelated(p,m,radius),red=0,nextD=d-1+(extend?1:0),nextE=ext-(extend?1:0),u=make(p,m);let v;if(first)v=search(p,nextD,a,b,ctx,nextE);else if(max){v=search(p,nextD-red,a,a+1,ctx,nextE);if(red&&v>a)v=search(p,nextD,a,a+1,ctx,nextE);if(v>a&&v<b)v=search(p,nextD,a,b,ctx,nextE)}else{v=search(p,nextD-red,b-1,b,ctx,nextE);if(red&&v<b)v=search(p,nextD,b-1,b,ctx,nextE);if(v<b&&v>a)v=search(p,nextD,a,b,ctx,nextE)}undo(p,u);first=false;if((max&&v>best)||(!max&&v<best)){best=v;bestM=sig}if(max){if(best>a)a=best}else if(best<b)b=best;if(b<=a){if(!isTac)ctx.history.set(sig,(ctx.history.get(sig)??0)+d*d);break}i++}if(!ctx.openingActive)ctx.tt.store(p,d,ext,best,best<=a0?2:best>=b0?1:0,bestM);return best}
+// Opening preferences are root-only, so search does not accumulate artificial bonuses.
+// Board indices: a1=(5,0), f6=(0,5); reverse both axes for gote.
+const openingSquare=(side,file,rank)=>idx(side===SENTE?6-rank:rank-1,side===SENTE?file:5-file);
+function openingBonus(p,m){
+  if(m.from<0||m.kind===4||m.capture>=0)return 0;
+  const side=p.turn,from=(f,r)=>openingSquare(side,f.charCodeAt(0)-97,r);
+  const moving=p.b[m.from],t=typeOf(moving);
+  const is=(type,a,b)=>t===type&&m.from===a&&m.to===b;
+  const enemyAt=(type,sq)=>p.b[sq]===-side*type;
+  if(is(6,from('f',1),from('e',2))&&enemyAt(2,openingSquare(side,4,4)))return 90;
+  if(is(2,from('b',1),from('b',2))&&enemyAt(6,openingSquare(side,1,4)))return 90;
+  if(is(1,from('a',1),from('a',2)))return 75;
+  if(is(1,from('a',2),from('b',2)))return 55;
+  if(is(6,from('f',1),from('e',2)))return 45;
+  if(is(1,from('b',2),from('c',2)))return 30;
+  if(is(3,from('d',1),from('d',2)))return 20;
+  // Hiro swaps horizontally with Emma in the initial back rank.
+  if(t===3&&m.kind===2&&row(m.from)===row(m.to)&&Math.abs(col(m.from)-col(m.to))===1&&typeOf(p.b[m.to])===4)return 20;
+  return 0;
+}
+// Only the real CPU move at the root may receive an opening preference.
+// Descendant search(), qsearch() and evalPos() never call openingBonus().
+function scoreRootCandidate(p,m,raw,openingActive){
+  const bonus=openingActive?openingBonus(p,m):0;
+  return {rawScore:raw,bonus,score:raw+(p.turn===SENTE?bonus:-bonus)};
+}
+function root(p,depth,ctx,seen,a=-INF,b=INF){
+  const max=p.turn===SENTE,fav=max?evalPos(p,ctx)>0:evalPos(p,ctx)<0;
+  const ranked=[],choices=[],preferred=ctx.rootBest;
+  for(const m of generate(p)){
+    const sig=moveSig(m),u=make(p,m),v=evalPos(p,ctx);undo(p,u);
+    ranked.push([m,v,sig]);
+  }
+  ranked.sort((x,y)=>{if(x[2]===preferred)return -1;if(y[2]===preferred)return 1;return max?y[1]-x[1]:x[1]-y[1]});
+  let first=true;
+  for(const [m,,sig] of ranked){
+    tick(ctx);
+    const u=make(p,m);
+    let v;
+    if(ctx.openingActive){
+      // Root candidates need comparable, exact scores. Do not use an aspiration/PVS
+      // bound from a different move before adding a root-only opening preference.
+      v=search(p,depth-1,-INF,INF,ctx);
+    }else if(first)v=search(p,depth-1,a,b,ctx);
+    else if(max){v=search(p,depth-1,a,a+1,ctx);if(v>a&&v<b)v=search(p,depth-1,a,b,ctx)}
+    else{v=search(p,depth-1,b-1,b,ctx);if(v<b&&v>a)v=search(p,depth-1,a,b,ctx)}
+    const rep=seen.has(hash(p));undo(p,u);first=false;
+    const {score,rawScore,bonus}=scoreRootCandidate(p,m,v,ctx.openingActive);
+    choices.push({move:m,score,rawScore,bonus,repeats:rep,sig});
+    if(!ctx.openingActive){if(max)a=Math.max(a,v);else b=Math.min(b,v)}
+  }
+  const pool=fav&&choices.some(x=>!x.repeats)?choices.filter(x=>!x.repeats):choices;
+  pool.sort((x,y)=>max?y.score-x.score:x.score-y.score);
+  const result=pool[0]??null;
+  if(result)ctx.rootBest=result.sig;
+  if(ctx.openingActive&&result){
+    ctx.openingDebug=pool.slice(0,5).map(x=>({move:toAction(ctx.sourceState,x.move),raw:x.rawScore,bonus:x.bonus,adjusted:x.score}));
+  }
+  return result;
+}
 function prove(p,attacker,d,ctx){tick(ctx);const key=`${attacker}:${d}:${hash(p)}`,cached=ctx.proof.get(key);if(cached!==undefined)return cached;const moves=generate(p),end=terminal(p,moves);if(end){const v=end.winner===attacker?1:-1;ctx.proof.set(key,v);return v}if(d===0)return 0;let unknown=false;if(p.turn===attacker){for(const m of moves){const u=make(p,m),v=prove(p,attacker,d-1,ctx);undo(p,u);if(v===1){ctx.proof.set(key,1);return 1}if(v===0)unknown=true}const v=unknown?0:-1;ctx.proof.set(key,v);return v}for(const m of moves){const u=make(p,m),v=prove(p,attacker,d-1,ctx);undo(p,u);if(v===-1){ctx.proof.set(key,-1);return-1}if(v===0)unknown=true}const v=unknown?0:1;ctx.proof.set(key,v);return v}
 function proveRoot(p,attacker,d,ctx){if(p.turn!==attacker)return{result:prove(p,attacker,d,ctx),move:null};let unknown=false;for(const m of generate(p)){const u=make(p,m),v=prove(p,attacker,d-1,ctx);undo(p,u);if(v===1)return{result:1,move:m};if(v===0)unknown=true}return{result:unknown?0:-1,move:null}}
 function toAction(s,m){if(m.kind===4){let handIndex=s.hands[s.turn].findIndex(q=>TYPES[q.type]===m.type);return{category:"drop",piece:s.hands[s.turn][handIndex],handIndex,to:[row(m.to),col(m.to)],promote:false}}const piece=s.board[row(m.from)][col(m.from)],a={category:m.magic&&m.magic!=="long"?"magic":"move",piece,from:[row(m.from),col(m.from)],to:[row(m.to),col(m.to)],promote:m.promote};if(m.magic&&m.magic!=="long")a.magic=m.magic;if(m.kind===1){a.captureAt=[row(m.capture),col(m.capture)];a.movePiece=false}else if(m.kind===2)a.swap=true;else if(m.kind===3){a.captureAt=[row(m.capture),col(m.capture)];a.movePiece=true}else if(m.magic==="浮遊"){a.jumpOver=[(row(m.from)+row(m.to))/2,col(m.from)];a.movePiece=true}else if(piece.type==="sherry"&&m.magic===""){const target=s.board[row(m.to)][col(m.to)];if(!piece.promoted&&target){a.category="magic";a.magic="サイドステップ";a.captureAt=[row(m.to),col(m.to)];a.movePiece=true}}if(m.magic==="long")a.longForward=true;return a}
 export function numericLegalActions(s){const p=fromState(s);return generate(p).map(m=>toAction(s,m))}
-export function numericBestAction(s,seenEntries=[],depth=7,{timeLimitMs=10000,tt=null,minDepth=5}={}){const p=fromState(s),started=performance.now(),hard=started+timeLimitMs,ctx={tt:tt??createTranspositionTable(),proof:new Map(),nodes:0,deadline:hard,history:new Map(),rootBest:0,qDepth:2},numericSeen=new Set(seenEntries);let best=null,done=0,proven=false,previous=0;for(let d=1;d<=depth;d+=2){ctx.deadline=d<=minDepth?Infinity:hard;try{let x;if(d===1)x=root(p,d,ctx,numericSeen);else{x=root(p,d,ctx,numericSeen,previous-180,previous+180);if(x&&(x.score<=previous-180||x.score>=previous+180))x=root(p,d,ctx,numericSeen)}if(x){best=x;previous=x.score;done=d;const currentWinning=p.turn===SENTE?x.score>=900000:x.score<=-900000;if(currentWinning){ctx.deadline=hard;const proof=proveRoot(p,p.turn,d,ctx);if(proof.result===1){proven=true;best.score=x.score;if(proof.move)best.move=proof.move;break}}}}catch(e){if(e!==TIMEOUT)throw e;break}}if(!best)return null;if(!proven&&Math.abs(best.score)>=900000){ctx.deadline=hard;const forcedScore=best.score,attacker=forcedScore>0?SENTE:GOTE;best.score=evalPos(p,ctx);try{const proof=proveRoot(p,attacker,done+2,ctx);if(proof.result===1){proven=true;best.score=forcedScore;if(proof.move&&attacker===p.turn)best.move=proof.move}}catch(e){if(e!==TIMEOUT)throw e}}return{action:toAction(s,best.move),score:proven?(best.score>0?20000:-20000):best.score,depth:done,nodes:ctx.nodes,proven}}
+export function numericBestAction(s,seenEntries=[],depth=7,{timeLimitMs=10000,tt=null,minDepth=5,openingActive=false,cpuOwnMoves=0}={}){const p=fromState(s);p.cpuSide=p.turn;p.cpuMoves=cpuOwnMoves;const started=performance.now(),hard=started+timeLimitMs,ctx={tt:tt??createTranspositionTable(),proof:new Map(),nodes:0,deadline:hard,history:new Map(),rootBest:0,qDepth:2,openingActive,cpuSide:p.cpuSide,zeroEmmaProgress:cpuOwnMoves<3,sourceState:s,openingDebug:[]},numericSeen=new Set(seenEntries);let best=null,done=0,proven=false,previous=0;for(let d=1;d<=depth;d+=2){ctx.deadline=d<=minDepth?Infinity:hard;try{let x;if(d===1)x=root(p,d,ctx,numericSeen);else{x=root(p,d,ctx,numericSeen,previous-180,previous+180);if(x&&(x.score<=previous-180||x.score>=previous+180))x=root(p,d,ctx,numericSeen)}if(x){best=x;previous=x.score;done=d;const currentWinning=p.turn===SENTE?x.score>=900000:x.score<=-900000;if(currentWinning){ctx.deadline=hard;const proof=proveRoot(p,p.turn,d,ctx);if(proof.result===1){proven=true;best.score=x.score;if(proof.move)best.move=proof.move;break}}}}catch(e){if(e!==TIMEOUT)throw e;break}}if(!best)return null;if(!proven&&Math.abs(best.score)>=900000){ctx.deadline=hard;const forcedScore=best.score,attacker=forcedScore>0?SENTE:GOTE;best.score=evalPos(p,ctx);try{const proof=proveRoot(p,attacker,done+2,ctx);if(proof.result===1){proven=true;best.score=forcedScore;if(proof.move&&attacker===p.turn)best.move=proof.move}}catch(e){if(e!==TIMEOUT)throw e}}return{action:toAction(s,best.move),score:proven?(best.score>0?20000:-20000):best.score,depth:done,nodes:ctx.nodes,proven,...(openingActive?{openingDebug:ctx.openingDebug,openingBonus:best.bonus??0}: {})}}
