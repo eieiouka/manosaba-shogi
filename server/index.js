@@ -1,7 +1,8 @@
 import http from 'node:http';
 import {pathToFileURL} from 'node:url';
 import {randomUUID, randomInt,createHash,timingSafeEqual} from 'node:crypto';
-import {readFileSync} from 'node:fs';
+import {readFileSync,writeFileSync,renameSync,mkdirSync} from 'node:fs';
+import {dirname} from 'node:path';
 import {createHistory} from './history.js';
 import {createProfiles} from './profiles.js';
 import {makeInitialState,generateAllLegalActions,applyLegalAction,terminalResult,opposite,positionKey} from '../src/game/rules.js';
@@ -27,6 +28,24 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
   // All modes share one authoritative matchmaking queue. Waiting subcounts are subsets.
   const queueCounts=()=>({online:queue.filter(p=>p.queued&&connected(p)&&p.queueMode==='online').length,cpu:queue.filter(p=>p.queued&&connected(p)&&p.queueMode==='cpu').length,learning:queue.filter(p=>p.queued&&connected(p)&&p.queueMode==='learning').length});
   // All modes share one authoritative matchmaking queue. Waiting subcounts are subsets.
+  // Persistent hourly analytics. UTC hour keys, displayed as JST by the admin UI.
+  const analyticsPath=process.env.ANALYTICS_PATH||new URL('./data/hourly-analytics.json',import.meta.url);
+  const analyticsFile=analyticsPath instanceof URL?analyticsPath:new URL('file://'+analyticsPath);
+  let analytics={hours:{}};
+  try{const parsed=JSON.parse(readFileSync(analyticsFile,'utf8'));if(parsed?.hours&&typeof parsed.hours==='object')analytics=parsed}catch(e){if(e.code!=='ENOENT')console.error('[analytics read]',e.message)}
+  const analyticsModes=['cpu','learning','queue','online'];
+  const analyticsHour=at=>new Date(Math.floor(at/3600000)*3600000).toISOString();
+  const saveAnalytics=()=>{try{const file=analyticsFile.pathname;mkdirSync(dirname(file),{recursive:true});const temp=file+'.tmp';writeFileSync(temp,JSON.stringify(analytics));renameSync(temp,file)}catch(e){console.error('[analytics save]',e.message)}};
+  const trackAnalytics=(id,mode,kind='presence',at=Date.now())=>{
+   const hour=analyticsHour(at),cutoff=at-8*86400000;
+   for(const k of Object.keys(analytics.hours))if(Date.parse(k)<cutoff)delete analytics.hours[k];
+   const row=analytics.hours[hour]??={users:[],cpu:0,learning:0,queue:0,online:0};
+   // Hash anonymous browser identifier per hour; do not persist the raw identifier.
+   const hash=createHash('sha256').update(hour+':'+id).digest('hex');
+   if(!row.users.includes(hash))row.users.push(hash);
+   if(kind==='start'&&analyticsModes.includes(mode))row[mode]++;
+   saveAnalytics();
+  };
  const history=createHistory(historyPath);
  const profiles=createProfiles(profilesPath);
  const updateRanks=m=>{if(m.rankProcessed)return;m.rankProcessed=true;try{
@@ -93,13 +112,19 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
    }
    const all=history.list();
    const status=r=>r.result?'終了':matches.has(r.id)?'対局中':'中断（サーバー再起動）';
+   if(requestUrl.pathname==='/admin/analytics'){
+     const hours=Math.min(168,Math.max(1,Number(requestUrl.searchParams.get('hours'))||24));
+     const end=Math.floor(Date.now()/3600000)*3600000;
+     const rows=Array.from({length:hours},(_,i)=>{const hour=analyticsHour(end-(hours-1-i)*3600000),r=analytics.hours[hour];return {hour,unique:r?.users?.length||0,cpu:r?.cpu||0,learning:r?.learning||0,queue:r?.queue||0,online:r?.online||0}});
+     adminJson(200,{rows,timezone:'Asia/Tokyo'});return;
+    }
    if(requestUrl.pathname==='/admin/matches'){
     const search=(requestUrl.searchParams.get('q')||'').toLowerCase();
     const rows=all.filter(r=>!search||Object.values(r.nicknames).some(n=>n.toLowerCase().includes(search))).sort((a,b)=>b.startedAt-a.startedAt);
     const offset=Math.max(0,Math.trunc(Number(requestUrl.searchParams.get('offset'))||0));
     const day=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo'});
     const today=day.format(now);
-    adminJson(200,{operatorAccepting,summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queueCounts().online,cpuWaiting:queueCounts().cpu,learningWaiting:queueCounts().learning,cpuActive:cpuCount(),learningActive:learningCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<adminActivityTtlMs);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
+    adminJson(200,{operatorAccepting,summary:{total:all.length,today:all.filter(r=>day.format(r.startedAt)===today).length,completed:all.filter(r=>r.result).length,active:[...matches.values()].filter(m=>!m.result).length,waiting:queueCounts().online,cpuActive:cpuCount(),learningActive:learningCount(),storageError:history.storageError},waitingAlert:{lonely:lonelyWaiting(),epoch:waitingEpoch,sequence:waitingSequence,events:waitingEvents,activity:(()=>{const id=requestUrl.searchParams.get('watch');const tabs=[...adminActivity.values()].filter(a=>a.id===id&&Date.now()-a.at<adminActivityTtlMs);return tabs.length?{known:true,busy:tabs.some(a=>a.active)}:{known:false,busy:true}})()},total:rows.length,offset,items:rows.slice(offset,offset+50).map(r=>({...r,moves:undefined,moveCount:r.moves.length,status:status(r)}))});return;
    }
    if(requestUrl.pathname==='/admin/match'){
     const r=history.get(requestUrl.searchParams.get('id'));
@@ -114,6 +139,14 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
   if(req.method==='OPTIONS'){res.writeHead(204).end();return}
   const url=new URL(req.url,'http://localhost');
   const json=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data))};
+   if(req.method==='POST'&&url.pathname==='/analytics/event'){
+    let raw='';try{
+     for await(const chunk of req){raw+=chunk;if(raw.length>512){json(413,{error:'too large'});return}}
+     const body=JSON.parse(raw||'{}');
+     if(typeof body.id!=='string'||!/^[0-9a-f-]{36}$/i.test(body.id)||!analyticsModes.includes(body.mode)||!['presence','start'].includes(body.kind)){json(400,{error:'invalid analytics event'});return}
+     trackAnalytics(body.id,body.mode,body.kind);json(200,{ok:true});
+    }catch{json(400,{error:'invalid JSON'})}return;
+   }
    if(req.method==='POST'&&url.pathname==='/learning-presence'){
     let raw='';try{
      for await(const chunk of req){raw+=chunk;if(raw.length>1024){json(413,{error:'too large'});return}}

@@ -93,6 +93,11 @@ function HowToPlayDialog({onClose}){
 export default function App(){
  const initial=useMemo(()=>makeInitialState(),[]);
  const [started,setStarted]=useState(false);
+  const analyticsBrowserId=useRef(null);
+  const analyticsPrevious=useRef('');
+  const [analyticsStarts,setAnalyticsStarts]=useState(0);
+  useEffect(()=>{try{let id=localStorage.getItem('manosaba-analytics-browser-id');if(!id){id=crypto.randomUUID();localStorage.setItem('manosaba-analytics-browser-id',id)}analyticsBrowserId.current=id}catch{analyticsBrowserId.current=crypto.randomUUID()}},[]);
+
  const [mode,setMode]=useState("ai");
   const {confirmLearningBack,setConfirmLearningBack,learningDialogue,setLearningDialogue,learningLevelIndex,setLearningLevelIndex,learningHistory,setLearningHistory,learningOutcome,setLearningOutcome,learningChapterSelect,setLearningChapterSelect,learningGeneration}=useLearningState();
  const [humanSide,setHumanSide]=useState("sente");
@@ -144,6 +149,23 @@ export default function App(){
  const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
+  // Report current activity every minute so a continuous visit spans hour boundaries.
+  const analyticsMode=started?(mode==='learning'?'learning':mode==='ai'?'cpu':mode==='online'?'online':null):(['queued','connecting'].includes(online.status)?'queue':null);
+  useEffect(()=>{
+   if(!analyticsMode)return;
+   let cancelled=false;
+   const key=analyticsMode+(analyticsMode==='online'?':'+(online.match?.id||'queue'):':'+analyticsStarts);
+   const send=kind=>{
+    if(cancelled||!analyticsBrowserId.current)return;
+    fetch((import.meta.env.VITE_MATCH_SERVER_URL||'http://localhost:3001').replace(/\/$/,'')+'/analytics/event',{
+     method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:analyticsBrowserId.current,mode:key,kind}),keepalive:true
+    }).catch(()=>{});
+   };
+   send(analyticsPrevious.current===key?'presence':'start');analyticsPrevious.current=key;
+   const timer=setInterval(()=>send('presence'),60000);
+   return()=>{cancelled=true;clearInterval(timer)};
+  },[analyticsMode,analyticsStarts,online.match?.id]);
+  useEffect(()=>{if(!analyticsMode)analyticsPrevious.current=''},[analyticsMode]);
  useCpuPresence(started&&mode==="ai"&&!gameOver);
  useLearningPresence(started&&mode==="learning");
  useAdminActivity(started&&!gameOver);
