@@ -8,7 +8,7 @@ import {useLearningPresence} from "./online/useLearningPresence.js";
 import {useOnline} from "./online/useOnline.js";
 import NicknameReset from "./online/NicknameReset.jsx";
 import RankLabel from "./online/RankLabel.jsx";
-import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,generatePseudoActions,applyLegalAction,terminalResult,repetitionResult,isEmmaInCheck} from "./game/rules.js";
+import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,generatePseudoActions,promotionStatus,applyLegalAction,terminalResult,repetitionResult,isEmmaInCheck} from "./game/rules.js";
 import "./result-invite.css";
 import "./online/nickname-reset.css";
 import {stateKey} from "./game/aiEngine.js";
@@ -48,7 +48,7 @@ function nanokaForkActions(state){
   if(!piece||piece.side!==state.turn)continue;
   for(const action of generatePseudoActions(state,r,c)){
    if(action.swap)continue;
-   out.push({...action,promote:false});
+   out.push({...action,promote:action.movePiece===false?false:promotionStatus(piece,r,action.to[0]).mustPromote});
   }
  }
  for(const [handIndex,piece] of state.hands[state.turn].entries()){
