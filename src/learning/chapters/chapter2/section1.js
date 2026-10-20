@@ -17,24 +17,24 @@ export default {
    pageGuides:[guide("b1"),guide("b1")],
    playerMoveAt:1,
    correct:[{piece:"hanna",from:"b1",category:"move",toRank:2}],
-   failureLines:["まずは黄色で表示された通常移動を試してちょうだい。"],
+   failureLines:["関係ないことをしないでちょうだい。イライラするわ。"],
   },
   {
    // 直前の着手を教材上の初期盤面へ戻してから開始する。
    resetOnEnter:"initial",
    lines:[
-    "次は魔法「空中浮遊」よ。盤面を初期配置に戻したわ。",
-    "ハンナをb1からb3へ、2マス飛ばしてみてちょうだい。",
+    "次は「空中浮遊」の魔法を解説するわ。盤面を初期配置に戻したわよ。",
+    "空中浮遊の魔法を使って、遠野ハンナを2マス進めてみてちょうだい。",
    ],
    pageGuides:[guide("b1"),guide("b1")],
    playerMoveAt:1,
    correct:[{piece:"hanna",from:"b1",to:"b3",magic:"浮遊"}],
-   afterMoveLines:["そうよ。これが2マス飛べる空中浮遊の魔法ね。"],
+   afterMoveLines:["お見事ね。空中浮遊を使えば、前に2マス進めるわ。"],
    afterMovePageGuides:[[]],
    branches:[
     {when:{piece:"hanna",from:"b1",category:"move"},lines:["今度は通常移動じゃなくて、空中浮遊を使ってちょうだい。"]},
    ],
-   failureLines:["赤色のb3へ、空中浮遊を使って進んでちょうだい。"],
+   failureLines:["関係ないことをしないでちょうだい。イライラするわ。"],
   },
   {
    // ナノカb2が途中にいてもハンナは飛び越えられる。
@@ -47,22 +47,22 @@ export default {
     turn:"sente",
    },
    lines:[
-    "今度は私（ナノカ）がb2にいる盤面よ。相手のナノカもe5に移したわ。",
-    "途中に味方の駒がいても、空中浮遊なら飛び越えられるわ。b3へ進めて。",
+    "今度は私（ナノカ）が遠野ハンナの目の前にいる盤面よ。",
+    "途中に味方・相手の駒がいても、空中浮遊なら飛び越えられるわ。遠野ハンナを2マス前に進めて。",
    ],
    pageGuides:[guide("b1"),guide("b1")],
    playerMoveAt:1,
    correct:[{piece:"hanna",from:"b1",to:"b3",magic:"浮遊"}],
    branches:[
-    {when:{piece:"hanna",from:"b1",category:"move"},lines:["ここは通常移動ではなく、空中浮遊でナノカを飛び越えてちょうだい。"]},
+    {when:{piece:"hanna",from:"b1",category:"move"},lines:["ここは通常移動じゃなくて、空中浮遊で私を飛び越えてちょうだい。"]},
    ],
-   failureLines:["b2に駒がいても、浮遊でb3まで飛べるわよ。"],
+   failureLines:["関係ないことをしないでちょうだい。イライラするわ。"],
   },
   {
    lines:[
-    "ちゃんと飛び越えられたわね。",
-    "相手の宝生マーゴがa6からb5に出てきたわ。",
-    "ハンナの利きを見て。2マス先に敵がいると、浮遊では取れないのよ。",
+    "駒を飛び越えて、2マス前に進められたわね。",
+    "相手の宝生マーゴが遠野ハンナの前に出てきたわ。",
+    "遠野ハンナの利きを見て。2マス先に敵がいると、空中浮遊で進めないわ。",
     "途中の駒は飛び越えられても、着地点の駒は取れない。覚えておきなさい。",
    ],
    pageGuides:[guide("b3"),[],guide("b3"),guide("b3")],
@@ -73,8 +73,8 @@ export default {
   },
  ],
  successLines:[
-  "通常移動と空中浮遊の違い、分かったかしら。",
-  "浮遊は途中の駒を飛び越えられるけど、着地点に駒がいると使えないのよ。",
+  "遠野ハンナの移動方法が分かったかしら？",
+  "次の章からは、遠野ハンナの活用法などを解説するわ。",
  ],
- defaultFailureLines:["ハンナの利きを見て、もう一度考えてちょうだい。"],
+ defaultFailureLines:["関係ないことをしないでちょうだい。イライラするわ。"],
 };
