@@ -548,7 +548,7 @@ export default function App(){
     setLearningHistory(h=>[...h,learningMoveRecord(action,before)]);setSceneAutoDone(true);
     setSelected(null);setHandType(null);setPieceGuide(null);clearScene();
    },action.magic==="銃撃"?1080:600));
-  },scene.autoDelayMs??(scene.autoMoveAt===0?700:250));sceneTimers.current.push(timer);
+  },scene.autoDelayMs??250);sceneTimers.current.push(timer);
  },[mode,learningLevelIndex,sceneIndex,learningDialogue,sceneAutoDone,learningOutcome?.kind]);
  // Scripted opponent actions are bound to a specific dialogue page, not to a fixed one-page step.
  // Lock synchronously on entering the trigger page, and never cancel a pending move on re-render.

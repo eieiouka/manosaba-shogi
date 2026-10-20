@@ -157,6 +157,7 @@ export default {
         "to": "e5"
       },
       "autoMoveAt": 0,
+      "autoDelayMs": 1000, // プレイヤーの着手後：1秒待機
       "playerMoveAt": 2,
       "correct": [
         {
