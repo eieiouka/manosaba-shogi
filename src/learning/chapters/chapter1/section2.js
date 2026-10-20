@@ -1,5 +1,11 @@
 export default {
   id:"nanoka-2",
+  interludeRule:{
+   afterMove:1,trigger:"b2c2",autoAtPage:1,
+   autoMove:{piece:"hiro",from:"d5",to:"d4",category:"move"},
+   finishAt:3,finalMove:{piece:"nanoka",from:"c2",to:"e4",magic:"銃撃"},
+   captureSquare:"e4",capturePiece:"hanna",
+  },
   title:"ナノカ 生け捕りの筋",
   chapter:"第1章　2節",
   // 初期配置から指定された5枚だけを移動。残りの駒・持ち駒は初期状態のまま。

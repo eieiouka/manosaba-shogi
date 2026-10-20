@@ -3,6 +3,17 @@ export default {
   "id": "nanoka-4",
   "chapter": "第1章　4節",
   "title": "ナノカの両取り",
+  actionMode:"pseudo",
+  ignoreTerminal:true,
+  retryOpeningFailure:true,
+  failedDropGuide:{scene:0,piece:"nanoka",exclude:"d2"},
+  // Common learning engine settings. No App.jsx section-id branches.
+  openingBranches:[
+   {when:{piece:"sherry",from:"e1",to:"e2"},linesKey:"sherryOneStepFailureLines"},
+   {when:{piece:"sherry",from:"e1",to:"e3"},response:{piece:"hanna",from:"f4",to:"e3"},delayMs:1000,linesKey:"sherryTwoStepFailureLines"},
+   {when:{piece:"nanoka",category:"drop",to:"f2"},response:{piece:"hanna",from:"f4",to:"e3"},delayMs:1000,linesKey:"forkFailureLines"},
+   {when:{piece:"nanoka",category:"drop",to:"e4"},response:{piece:"hiro",from:"d4",to:"e4"},delayMs:1000,linesKey:"hiroFailureLines"},
+  ],
   "setup": {
     "board": [
       [
