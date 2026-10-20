@@ -32,7 +32,7 @@ export default {
   ],
   // 中継セリフは利き表示なし（必要ならここへ追加）
   interludePageGuides: [
-    [], // 1ページ目
+    [{side:"sente",type:"nanoka",square:"c2"}], // 1ページ目
     [], // 2ページ目
     [], // 3ページ目
   ],
@@ -49,9 +49,37 @@ export default {
    "相手の援軍がいても、射線が通っていればタダで取れるのが私の強みよ。",
    "相手が駒を飛び出してきたら、積極的に狙うと良いわ。",
   ],
+  // 失敗時の利き表示も、セリフ1ページにつき配列1つで指定します。
+  // 特定手の分岐は汎用の nanoka-other より前に置いてください。
   branches:[
-   {id:"nanoka-other",when:{piece:"nanoka"},lines:["私を動かすのは正しいけど、そこじゃないわ。相手の遠野ハンナを狙いなさい。"]},
-   {id:"wrong-piece",when:{notPiece:"nanoka"},lines:["私以外を動かしたら、私の魔法が使えるのかしら？"]},
+   {
+    id:"nanoka-a2",when:{piece:"nanoka",from:"b2",to:"a2"},
+    lines:["私を動かすのは正しいけど、そこじゃないわ。相手の遠野ハンナを狙いなさい。"],
+    pageGuides:[
+     [{side:"sente",type:"nanoka",square:"a2"}], // 1ページ目：a2のナノカの通常移動・魔法
+    ],
+   },
+   {
+    id:"nanoka-b3",when:{piece:"nanoka",from:"b2",to:"b3"},
+    lines:["私を動かすのは正しいけど、そこじゃないわ。相手の遠野ハンナを狙いなさい。"],
+    pageGuides:[
+     [{side:"sente",type:"nanoka",square:"b3"}], // 1ページ目：b3のナノカの通常移動・魔法
+    ],
+   },
+   {
+    id:"nanoka-other",when:{piece:"nanoka"},
+    lines:["私を動かすのは正しいけど、そこじゃないわ。相手の遠野ハンナを狙いなさい。"],
+    pageGuides:[
+     [], // 1ページ目：利き表示なし
+    ],
+   },
+   {
+    id:"wrong-piece",when:{notPiece:"nanoka"},
+    lines:["私以外を動かしたら、私の魔法が使えるのかしら？"],
+    pageGuides:[
+     [], // 1ページ目：利き表示なし
+    ],
+   },
   ],
   // 中継後、ナノカの遠方狙撃を間違えたときのセリフ（App.jsxに直書きしない）
   finalMoveFailureLines:["取れる駒を取らないなんて…。頭が悪いわ、まるで桜羽エマね。"],

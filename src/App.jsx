@@ -8,11 +8,12 @@ import {useLearningPresence} from "./online/useLearningPresence.js";
 import {useOnline} from "./online/useOnline.js";
 import NicknameReset from "./online/NicknameReset.jsx";
 import RankLabel from "./online/RankLabel.jsx";
-import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,applyLegalAction,terminalResult,repetitionResult,isEmmaInCheck} from "./game/rules.js";
+import {PIECES,makeInitialState,generateAllLegalActions,generateLegalBoardActions,generatePseudoActions,applyLegalAction,terminalResult,repetitionResult,isEmmaInCheck} from "./game/rules.js";
 import "./result-invite.css";
 import "./online/nickname-reset.css";
 import {stateKey} from "./game/aiEngine.js";
 import {LEARNING_LEVELS,learningMoveRecord,learningStartState,evaluateLearningHistory} from "./learning/levels.js";
+import {learningBranchMatches} from "./learning/learningEngine.js";
 import {useLearningState} from "./learning/useLearningState.js";
 import {scriptedStep,scriptedLines,scriptedPlayerMatches,scriptedAutoAction,scriptedAutoMovePage,scriptedFailureLines,scriptedDisplayStep,sceneAutoAction,scenePlayerMatches,scriptedFailureBranch} from "./learning/learningCore.js";
 import {LearningChapterHeading,LearningDialogue,LearningChapterSelect,LearningBackConfirm} from "./learning/LearningUI.jsx";
@@ -39,6 +40,24 @@ function sendAnalytics(mode,kind){
   }).catch(error=>console.warn("[analytics] event failed",mode,kind,error));
 }
 
+// 第1章4節はエマのない戦術教材。王手判定を行わず駒の動きだけを利用する。
+function nanokaForkActions(state){
+ const out=[];
+ for(let r=0;r<6;r++)for(let c=0;c<6;c++){
+  const piece=state.board[r][c];
+  if(!piece||piece.side!==state.turn)continue;
+  for(const action of generatePseudoActions(state,r,c)){
+   if(action.swap)continue;
+   out.push({...action,promote:false});
+  }
+ }
+ for(const [handIndex,piece] of state.hands[state.turn].entries()){
+  for(let r=0;r<6;r++)for(let c=0;c<6;c++)if(!state.board[r][c]&&(state.turn==='sente'?r!==0:r!==5)){
+   out.push({category:'drop',piece,handIndex,to:[r,c],promote:false});
+  }
+ }
+ return out;
+}
 const randomSide=()=>Math.random()<.5?"sente":"gote";
 const HAND_ORDER=["sherry","hanna","hiro","nanoka","margo"];
 const DIFFICULTIES=[
@@ -141,6 +160,7 @@ export default function App(){
  const worker=useRef(null),request=useRef(0),motionFxRef=useRef(null),motionSequence=useRef(0),backgroundMusic=useRef(null);
  const guideTimer=useRef(null),guideTriggered=useRef(false);
  const [learningAutoMoving,setLearningAutoMoving]=useState(false);
+  const [forkFailurePending,setForkFailurePending]=useState(null);
  const [sceneIndex,setSceneIndex]=useState(0),[sceneAutoDone,setSceneAutoDone]=useState(false);
  const sceneBusy=useRef(false),sceneTimers=useRef([]),sceneSnapshots=useRef([]),scenePlayerSnapshots=useRef([]);
  const clearScene=()=>{sceneTimers.current.forEach(clearTimeout);sceneTimers.current=[];sceneBusy.current=false;learningAutoMovingRef.current=false;setLearningAutoMoving(false);};
@@ -162,7 +182,7 @@ export default function App(){
   setTimeline([data.state]);setStarted(true);
  },()=>{
  });
- const result=useMemo(()=>mode==="online"?online.match?.result:terminalResult(state)??repetitionResult(state,timeline),[state,timeline,mode,online.match]);
+ const result=useMemo(()=>mode==="online"?online.match?.result:mode==="learning"&&LEARNING_LEVELS[learningLevelIndex]?.id==="nanoka-4"?null:terminalResult(state)??repetitionResult(state,timeline),[state,timeline,mode,online.match,learningLevelIndex]);
  const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
@@ -205,7 +225,7 @@ export default function App(){
   }),[timeline]);
  const cpuOwnMoves=timeline.slice(1).filter((_,i)=>((i%2===0)?"sente":"gote")===opponentSide).length;
  const seen=useMemo(()=>timeline.map(stateKey),[timeline]);
- const legal=useMemo(()=>gameOver?[]:generateAllLegalActions(state),[state,gameOver]);
+ const legal=useMemo(()=>gameOver?[]:mode==="learning"&&LEARNING_LEVELS[learningLevelIndex]?.id==="nanoka-4"?nanokaForkActions(state):generateAllLegalActions(state),[state,gameOver,mode,learningLevelIndex]);
  const selectable=useMemo(()=>legal.filter(a=>a.category==="drop"?handType!==null&&a.piece.type===handType:selected&&a.from?.[0]===selected[0]&&a.from?.[1]===selected[1]),[legal,selected,handType]);
  // 教材のページに対応する駒の移動範囲を、盤面操作を解禁せずに表示する。
  // 教材データの pageGuides はセリフページと同じ順序の配列。
@@ -231,18 +251,33 @@ export default function App(){
   if(!piece||piece.side!==learningPageGuide.side||piece.type!==learningPageGuide.type)return null;
   return {row,col,piece};
  },[learningPageGuide,state]);
- const activeGuide=pieceGuide?.row!=null&&pieceGuide?.col!=null?pieceGuide:learningGuidePiece;
+ // 第1章4節：通常シーンは pageGuides に従う。
+ // f2/e4 の特殊失敗時だけ、実際に打った位置のナノカの利きを表示する。
+ // e4はヒロに捕獲された瞬間に消え、f2は失敗セリフ中も残る。
+ const level4FailureDropGuide=useMemo(()=>{
+  if(mode!=="learning"||LEARNING_LEVELS[learningLevelIndex]?.id!=="nanoka-4")return null;
+  if(sceneIndex!==0||learningOutcome?.kind==="success")return null;
+  const drop=learningHistory.find(record=>record.piece==="nanoka"&&record.category==="drop"&&record.side==="sente");
+  if(!drop||!["f2","e4"].includes(drop.to))return null;
+  if(!forkFailurePending&&learningOutcome?.kind!=="failure")return null;
+  const row=6-Number(drop.to[1]),col=drop.to.charCodeAt(0)-97;
+  const piece=state.board[row]?.[col];
+  return piece?.type==="nanoka"&&piece.side==="sente"?{row,col,piece}:null;
+ },[mode,learningLevelIndex,sceneIndex,learningHistory,forkFailurePending,learningOutcome?.kind,state]);
+ const activeGuide=pieceGuide?.row!=null&&pieceGuide?.col!=null?pieceGuide:(level4FailureDropGuide??learningGuidePiece);
  const guideActions=useMemo(()=>{
   if(!activeGuide)return[];
-  const guideState=state.turn===activeGuide.piece.side?state:{...state,turn:activeGuide.piece.side};
-  return generateLegalBoardActions(guideState,activeGuide.row,activeGuide.col);
+  // A learning setup may intentionally omit Emma. Legal-move generation then
+  // rejects every move as "in check"; attack guides must use piece moves instead.
+  // The same rule is used for long-press and scripted learning highlights.
+  return generatePseudoActions(state,activeGuide.row,activeGuide.col);
  },[state,activeGuide]);
  const guideTargets=useMemo(()=>{
   const targets=new Map();
   for(const action of guideActions){
    const key=`${action.to[0]},${action.to[1]}`;
    if(action.category==="magic"||action.longForward)targets.set(key,"magic");
-   else if(!targets.has(key))targets.set(key,"normal");
+   else targets.set(key,"normal");
   }
   // マーゴ共通ガイド：通常移動は黄色、周囲の空マスは赤。
   // 敵駒のあるマスは跳躍暗殺が合法な場合のみ赤。味方駒は表示しない。
@@ -417,6 +452,11 @@ export default function App(){
      return;
     }
    }
+    if(level.id==="nanoka-4"&&sceneIndex===0&&record.category==="drop"&&record.piece==="nanoka"&&["f2","e4"].includes(record.to)){
+     // 第4節：誤打後に相手の応手を1秒待ってから再生。
+     setForkFailurePending(record.to);
+     return;
+    }
    if(level.scenes){
     const scene=level.scenes[sceneIndex];
     scenePlayerSnapshots.current[sceneIndex]={t:timeline.length,h:learningHistory.length};
@@ -425,7 +465,16 @@ export default function App(){
      setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,scene,record),pageGuides:branch?.pageGuides??[]});
      setLearningDialogue(0);
     }
-    else{sceneSnapshots.current[sceneIndex+1]={t:timeline.length+1,h:history.length};setSceneIndex(i=>i+1);setSceneAutoDone(false);setLearningDialogue(0)}
+    else{
+     if(sceneIndex===level.scenes.length-1){
+      // Final correct move: display success rather than entering a nonexistent scene.
+      setLearningOutcome({kind:"success",lines:level.successLines});
+      setLearningDialogue(0);
+     }else{
+      sceneSnapshots.current[sceneIndex+1]={t:timeline.length+1,h:history.length};
+      setSceneIndex(i=>i+1);setSceneAutoDone(false);setLearningDialogue(0);
+     }
+    }
     return;
    }
    if(level.steps){
@@ -439,10 +488,44 @@ export default function App(){
     return;
    }
    const outcome=evaluateLearningHistory(level,history);
-   if(outcome){setLearningOutcome(outcome);setLearningDialogue(0)}
+   if(outcome){
+    if(outcome.kind==="failure"){
+     // The matching failure branch owns its per-dialogue-page attack guides.
+     // Do not reuse normal-page guides for failed moves.
+     const branch=level.branches?.find(item=>learningBranchMatches(item,history));
+     setLearningOutcome({...outcome,pageGuides:branch?.pageGuides??[]});
+    }else setLearningOutcome(outcome);
+    setLearningDialogue(0);
+   }
    else setLearningDialogue(level.lines.length-1);
   }else setTimeline(x=>[...x,applyLegalAction(x[x.length-1],action)]);
  }
+  // 第1章4節：f2はハンナ、e4はヒロが応手を指してから失敗。
+  useEffect(()=>{
+   if(!forkFailurePending||mode!=="learning"||LEARNING_LEVELS[learningLevelIndex]?.id!=="nanoka-4")return;
+   const generation=learningGeneration.current;
+   const destination=forkFailurePending;
+   let finishTimer;
+   const timer=setTimeout(()=>{
+    if(generation!==learningGeneration.current)return;
+    const before={...state,turn:"gote"};
+    const from=destination==="e4"?[2,3]:[2,5];
+    const to=destination==="e4"?[2,4]:[3,4];
+    const expectedType=destination==="e4"?"hiro":"hanna";
+    const action=nanokaForkActions(before).find(a=>a.piece?.type===expectedType&&a.from?.[0]===from[0]&&a.from?.[1]===from[1]&&a.to?.[0]===to[0]&&a.to?.[1]===to[1]&&!a.swap);
+    if(!action){setForkFailurePending(null);setLearningOutcome({kind:"failure",lines:["（失敗：相手の自動着手を確認してください）"]});setLearningDialogue(0);return;}
+    beginMotion(action,before);
+    setTimeline(t=>[...t,applyLegalAction(before,action)]);
+    finishTimer=setTimeout(()=>{
+     if(generation!==learningGeneration.current)return;
+     setForkFailurePending(null);
+     const level=LEARNING_LEVELS[learningLevelIndex];
+     setLearningOutcome({kind:"failure",lines:destination==="e4"?level.hiroFailureLines:level.forkFailureLines});
+     setLearningDialogue(0);
+    },750);
+   },1000);
+   return()=>{clearTimeout(timer);clearTimeout(finishTimer)};
+  },[forkFailurePending,mode,learningLevelIndex]);
  // 中継2/3に到達したらヒロを一度だけ自動移動する。
  // アニメーション完了までセリフ送りをロックし、連打による状態競合を防ぐ。
  const autoHiroPending=useRef(false);
@@ -486,7 +569,7 @@ export default function App(){
   const generation=learningGeneration.current;
   const timer=setTimeout(()=>{
    if(generation!==learningGeneration.current)return;
-   const before={...state,turn:"gote"},action=sceneAutoAction(scene,before);
+   const before={...state,turn:"gote"},action=LEARNING_LEVELS[learningLevelIndex].id==="nanoka-4"?nanokaForkActions(before).find(a=>{const record=learningMoveRecord(a,before);return Object.entries(scene.autoMove).every(([k,v])=>record[k]===v)}):sceneAutoAction(scene,before);
    if(!action){setLearningOutcome({kind:"failure",lines:["後手の着手が合法ではないわ。盤面を確認してちょうだい。"]});setLearningDialogue(0);clearScene();return}
    beginMotion(action,before);setTimeline(t=>[...t,applyLegalAction(before,action)]);
    sceneTimers.current.push(setTimeout(()=>{
@@ -494,7 +577,7 @@ export default function App(){
     setLearningHistory(h=>[...h,learningMoveRecord(action,before)]);setSceneAutoDone(true);
     setSelected(null);setHandType(null);setPieceGuide(null);clearScene();
    },action.magic==="銃撃"?1080:600));
-  },scene.autoMoveAt===0?700:250);sceneTimers.current.push(timer);
+  },scene.autoMoveAt===0?(learningLevel.id==="nanoka-4"?1000:700):250);sceneTimers.current.push(timer);
  },[mode,learningLevelIndex,sceneIndex,learningDialogue,sceneAutoDone,learningOutcome?.kind]);
  // Scripted opponent actions are bound to a specific dialogue page, not to a fixed one-page step.
  // Lock synchronously on entering the trigger page, and never cancel a pending move on re-render.
@@ -627,6 +710,7 @@ export default function App(){
   motionFxRef.current=null;setDifficultyDepth(depth);setDifficultyPrompt(null);setHumanSide(randomSide());setTimeline([makeInitialState()]);setSelected(null);setHandType(null);setThinking(false);setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);setStarted(true);
  }
  function startLearning(){
+   setForkFailurePending(null);
    setLearningStarts(n=>n+1);
   clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
   learningGeneration.current++;
@@ -638,6 +722,8 @@ export default function App(){
   setLearningDialogue(0);setLearningHistory([]);setLearningOutcome(null);setLearningChapterSelect(false);setConfirmLearningBack(false);setStarted(true);
  }
  function restoreLearningLevel(levelIndex=learningLevelIndex){
+  setForkFailurePending(null);
+   setForkFailurePending(null);
   clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
   learningAutoMovingRef.current=false;setLearningAutoMoving(false);autoHiroPending.current=false;
   learningGeneration.current++;
@@ -670,7 +756,19 @@ export default function App(){
  // Retry inside the dialogue restores the position just before the failed move.
  function retryLearningMove(){
   if(learningLevel.scenes){
-   if(learningOutcome?.kind==="failure"){learningGeneration.current++;clearScene();motionSequence.current++;motionFxRef.current=null;setMotionFx(null);setTimeline(t=>t.slice(0,-1));setLearningHistory(h=>h.slice(0,-1));setLearningOutcome(null);setLearningDialogue(learningLevel.scenes[sceneIndex].playerMoveAt);setSelected(null);setHandType(null);setPieceGuide(null)}return;
+   if(learningOutcome?.kind==="failure"){
+    // 第1章4節のf2/e4誤打は「ナノカ打ち＋ハンナ自動移動」の2手を戻す。
+    // 盤面だけでなく棋譜とシーンの進行も初手に戻す。
+    if(learningLevel.id==="nanoka-4"&&learningHistory[0]?.category==="drop"&&["f2","e4"].includes(learningHistory[0]?.to)){
+     restoreLearningLevel(learningLevelIndex);
+     setLearningDialogue(learningLevel.scenes[0].playerMoveAt);
+     setForkFailurePending(null);
+     return;
+    }
+    learningGeneration.current++;clearScene();motionSequence.current++;motionFxRef.current=null;setMotionFx(null);
+    setTimeline(t=>t.slice(0,-1));setLearningHistory(h=>h.slice(0,-1));setLearningOutcome(null);
+    setLearningDialogue(learningLevel.scenes[sceneIndex].playerMoveAt);setSelected(null);setHandType(null);setPieceGuide(null);
+   }return;
   }
   if(learningLevel.steps){resetScriptedStep();return;}
   // 中継後の失敗なら、直前の自動着手完了時点に戻して再挑戦する。
