@@ -252,13 +252,13 @@ export default function App(){
   return {row,col,piece};
  },[learningPageGuide,state]);
  // 第1章4節：通常シーンは pageGuides に従う。
- // f2/e4 の特殊失敗時だけ、実際に打った位置のナノカの利きを表示する。
- // e4はヒロに捕獲された瞬間に消え、f2は失敗セリフ中も残る。
+ // 第4節の初手が失敗した場合は、打った位置のナノカの利きを表示する。
+ // e4はヒロに捕獲された瞬間に消える。その他は盤上に残る間表示する。
  const level4FailureDropGuide=useMemo(()=>{
   if(mode!=="learning"||LEARNING_LEVELS[learningLevelIndex]?.id!=="nanoka-4")return null;
   if(sceneIndex!==0||learningOutcome?.kind==="success")return null;
   const drop=learningHistory.find(record=>record.piece==="nanoka"&&record.category==="drop"&&record.side==="sente");
-  if(!drop||!["f2","e4"].includes(drop.to))return null;
+  if(!drop||!/^[a-f][1-6]$/.test(drop.to)||drop.to==="d2")return null;
   if(!forkFailurePending&&learningOutcome?.kind!=="failure")return null;
   const row=6-Number(drop.to[1]),col=drop.to.charCodeAt(0)-97;
   const piece=state.board[row]?.[col];
