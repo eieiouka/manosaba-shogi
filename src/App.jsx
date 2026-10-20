@@ -103,7 +103,7 @@ function HowToPlayDialog({onClose}){
  return <div className="how-to-overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}>
   <section className="how-to-dialog" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
    <div className="how-to-dialog__heading"><h2 id="how-to-title">How to play</h2><button type="button" onClick={onClose} aria-label="閉じる">×</button></div>
-   <p>桜羽エマを取られたら負けです。桜羽エマが魔女化すると特殊勝利できます。</p>
+   <p>桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。</p>
    <p>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。</p>
    <p>取った駒は打てますが、敵陣最下段には打てません。</p>
    <p className="how-to-dialog__longpress">長押しで駒の能力を見れます。</p>
@@ -255,17 +255,21 @@ export default function App(){
   if(activeGuide?.piece.type==="margo"){
    targets.clear();
    const {row,col,piece}=activeGuide;
-   // 跳躍暗殺は横・斜め後ろ・真後ろの隣接敵を飛び越えて捕獲する。
-   // 敵がそのマスに来たと仮定し、飛び越えた先が盤内かつ空いている場合のみ赤。
-   const back=piece.side==="sente"?1:-1;
-   for(const [dr,dc] of [[0,-1],[0,1],[back,-1],[back,0],[back,1]]){
+   for(const dr of [-1,0,1])for(const dc of [-1,0,1]){
+    if(dr===0&&dc===0)continue;
     const r=row+dr,c=col+dc;
-    const landingRow=row+2*dr,landingCol=col+2*dc;
     if(r<0||r>=6||c<0||c>=6)continue;
-    if(landingRow<0||landingRow>=6||landingCol<0||landingCol>=6)continue;
-    if(state.board[landingRow][landingCol])continue;
     const occupant=state.board[r][c];
-    if(!occupant||occupant.side!==piece.side)targets.set(`${r},${c}`,"magic");
+    if(!occupant)targets.set(`${r},${c}`,"magic");
+   }
+   // 合法な跳躍暗殺で捕獲される敵駒のみ赤く示す。
+   for(const action of guideActions){
+    if(action.category!=="magic"&&!action.magic)continue;
+    const target=action.captureAt??action.to;
+    if(!target)continue;
+    const [r,c]=target;
+    if(Math.abs(r-row)>1||Math.abs(c-col)>1)continue;
+    if(state.board[r][c]?.side!==piece.side)targets.set(`${r},${c}`,"magic");
    }
    // 通常移動が可能なマスは常に黄色を優先する。
    for(const action of guideActions){
@@ -394,6 +398,23 @@ export default function App(){
   worker.current.postMessage({type:"think",id,state,seen,openingActive:openingActive&&cpuOwnMoves<5,cpuOwnMoves,timeLimitMs:effectRemainingMs+1000,minDepth:difficultyDepth,...((waitingCpu||difficultyDepth===1||difficultyDepth===5)?{maxDepth:waitingCpu?5:difficultyDepth}:{})});
  },[state,gameOver,seen,humanSide,started,difficultyDepth,mode,waitingCpu]);
 
+ // 正解後の解説を終えた場合も、通常の正解手と同じ共通処理で次のシーンへ。
+ function enterNextLearningScene(level,index,historyLength,timelineLength){
+  if(index===level.scenes.length-1){
+   setLearningOutcome({kind:"success",lines:level.successLines});setLearningDialogue(0);return;
+  }
+  const nextScene=level.scenes[index+1];
+  if(nextScene?.resetOnEnter){
+   const nextSetup=nextScene.resetOnEnter==="initial"?null:nextScene.setup;
+   const fresh=learningStartState({...level,setup:nextSetup});
+   setTimeline(t=>[...t,fresh]);
+   sceneSnapshots.current[index+1]={t:timelineLength+1,h:historyLength};
+  }else{
+   sceneSnapshots.current[index+1]={t:timelineLength,h:historyLength};
+  }
+  setSelected(null);setHandType(null);setPieceGuide(null);
+  setLearningOutcome(null);setSceneIndex(index+1);setSceneAutoDone(false);setLearningDialogue(0);
+ }
  async function commitAction(action,before){
   const generation=learningGeneration.current;
   await beginMotion(action,before);
@@ -436,13 +457,12 @@ export default function App(){
      setLearningDialogue(0);
     }
     else{
-     if(sceneIndex===level.scenes.length-1){
-      // Final correct move: display success rather than entering a nonexistent scene.
-      setLearningOutcome({kind:"success",lines:level.successLines});
+     if(scene.afterMoveLines?.length){
+      // 正解後の盤面を維持したまま、解説セリフを表示する。
+      setLearningOutcome({kind:"afterMove",lines:scene.afterMoveLines,pageGuides:scene.afterMovePageGuides??[]});
       setLearningDialogue(0);
      }else{
-      sceneSnapshots.current[sceneIndex+1]={t:timeline.length+1,h:history.length};
-      setSceneIndex(i=>i+1);setSceneAutoDone(false);setLearningDialogue(0);
+      enterNextLearningScene(level,sceneIndex,history.length,timeline.length+1);
      }
     }
     return;
@@ -590,6 +610,12 @@ export default function App(){
  },[mode,learningLevelIndex,learningHistory.length,learningDialogue,learningOutcome?.kind]);
  function advanceLearningDialogue(){
   if(learningAutoMovingRef.current)return;
+  if(mode==="learning"&&learningOutcome?.kind==="afterMove"){
+   if(learningDialogue===learningOutcome.lines.length-1){
+    enterNextLearningScene(learningLevel,sceneIndex,learningHistory.length,timeline.length);
+   }else setLearningDialogue(n=>n+1);
+   return;
+  }
   if(mode==="learning"&&learningLevel.scenes&&!learningOutcome){
    const scene=learningLevel.scenes[sceneIndex];
    if(scene&&!scene.correct?.length&&learningIsLast&&sceneAutoDone){setLearningOutcome({kind:"success",lines:learningLevel.successLines});setLearningDialogue(0);return}
@@ -840,7 +866,7 @@ export default function App(){
  const learningLevel=LEARNING_LEVELS[learningLevelIndex];
  const learningLines=learningOutcome?.lines||(learningLevel.scenes?learningLevel.scenes[sceneIndex]?.lines||learningLevel.lines:(learningLevel.steps?scriptedLines(learningLevel,learningHistory):learningLevel.lines));
  const learningIsLast=learningDialogue===learningLines.length-1;
- const learningBoardLocked=mode==="learning"&&(learningAutoMoving||learningOutcome?.kind==="failure"||learningOutcome?.kind==="success"||(learningLevel.scenes
+ const learningBoardLocked=mode==="learning"&&(learningAutoMoving||learningOutcome?.kind==="failure"||learningOutcome?.kind==="success"||learningOutcome?.kind==="afterMove"||(learningLevel.scenes
   ? (()=>{const scene=learningLevel.scenes[sceneIndex];return !scene?.correct?.length||learningDialogue<(scene.playerMoveAt??scene.lines.length-1)||(Boolean(scene.autoMove)&&!sceneAutoDone)})()
   : learningLevel.steps
   ? (()=>{
@@ -965,12 +991,12 @@ export default function App(){
   </div>}
   <main className="game-stage">
    <Hand className="hand--opponent" title="相手の持ち駒" pieces={visibleHand(opponentSide)} disabled activeType={null} onPick={()=>{}} perspective={humanSide} reverse onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
-   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${activeGuide?.row===r&&activeGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div><div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{if(mode==="online"&&savedReturnMode){restorePreviousMode();return;}if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが魔女化すると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
+   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?((target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${activeGuide?.row===r&&activeGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div><div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>mode==="online"?online.queue():setDifficultyPrompt("rematch")}>再対局</button><button className="result-overlay__friend" onClick={()=>{if(mode==="online"&&savedReturnMode){restorePreviousMode();return;}if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
   {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
-  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean((learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&sceneAutoDone)||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
+  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&sceneAutoDone)||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
   {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={requestLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
   {mode==="learning"&&confirmLearningBack&&<LearningBackConfirm onConfirm={leaveLearning} onCancel={()=>setConfirmLearningBack(false)}/>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
