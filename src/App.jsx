@@ -452,6 +452,17 @@ export default function App(){
      return;
     }
    }
+    if(level.id==="nanoka-4"&&sceneIndex===0&&record.piece==="sherry"&&record.from==="e1"){
+     if(record.to==="e2"){
+      setLearningOutcome({kind:"failure",lines:level.sherryOneStepFailureLines});
+      setLearningDialogue(0);
+      return;
+     }
+     if(record.to==="e3"){
+      setForkFailurePending("sherry-e3");
+      return;
+     }
+    }
     if(level.id==="nanoka-4"&&sceneIndex===0&&record.category==="drop"&&record.piece==="nanoka"&&["f2","e4"].includes(record.to)){
      // 第4節：誤打後に相手の応手を1秒待ってから再生。
      setForkFailurePending(record.to);
@@ -500,7 +511,7 @@ export default function App(){
    else setLearningDialogue(level.lines.length-1);
   }else setTimeline(x=>[...x,applyLegalAction(x[x.length-1],action)]);
  }
-  // 第1章4節：f2はハンナ、e4はヒロが応手を指してから失敗。
+  // 第1章4節：f2はハンナ、e4はヒロ、シェリーe3はハンナが応手を指してから失敗。
   useEffect(()=>{
    if(!forkFailurePending||mode!=="learning"||LEARNING_LEVELS[learningLevelIndex]?.id!=="nanoka-4")return;
    const generation=learningGeneration.current;
@@ -520,7 +531,7 @@ export default function App(){
      if(generation!==learningGeneration.current)return;
      setForkFailurePending(null);
      const level=LEARNING_LEVELS[learningLevelIndex];
-     setLearningOutcome({kind:"failure",lines:destination==="e4"?level.hiroFailureLines:level.forkFailureLines});
+     setLearningOutcome({kind:"failure",lines:destination==="e4"?level.hiroFailureLines:destination==="sherry-e3"?level.sherryTwoStepFailureLines:level.forkFailureLines});
      setLearningDialogue(0);
     },750);
    },1000);
@@ -759,7 +770,10 @@ export default function App(){
    if(learningOutcome?.kind==="failure"){
     // 第1章4節のf2/e4誤打は「ナノカ打ち＋ハンナ自動移動」の2手を戻す。
     // 盤面だけでなく棋譜とシーンの進行も初手に戻す。
-    if(learningLevel.id==="nanoka-4"&&learningHistory[0]?.category==="drop"&&["f2","e4"].includes(learningHistory[0]?.to)){
+    if(learningLevel.id==="nanoka-4"&&(
+      (learningHistory[0]?.category==="drop"&&["f2","e4"].includes(learningHistory[0]?.to))||
+      (learningHistory[0]?.piece==="sherry"&&learningHistory[0]?.from==="e1"&&["e2","e3"].includes(learningHistory[0]?.to))
+     )){
      restoreLearningLevel(learningLevelIndex);
      setLearningDialogue(learningLevel.scenes[0].playerMoveAt);
      setForkFailurePending(null);

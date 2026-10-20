@@ -91,13 +91,7 @@ export default {
         "1マス空きで敵の駒がいたら、チャンスよ。",
         "相手の遠野ハンナ・二階堂ヒロを、ダブルで狙える位置（両取り）に私を打ってちょうだい。"
       ],
-      "pageGuides": [
-        [],
-        [],
-        [],
-        [],
-        []
-      ],
+      "pageGuides": [[],[],[],[],[]],
       "playerMoveAt": 4,
       "correct": [
         {
@@ -117,7 +111,7 @@ export default {
         }
       ],
       "failureLines": [
-        "それでは、両取りにならないわね。"
+        "そこに打っても、両取りにならないわね。"
       ]
     },
     {
@@ -156,11 +150,7 @@ export default {
         "相手が遠野ハンナで、私（ナノカ）を奪ってきたわ。",
         "何をすれば良いか、もう分かるわね。"
       ],
-      "pageGuides": [
-        [],
-        [],
-        []
-      ],
+      "pageGuides": [[],[],[]],
       "autoMove": {
         "piece": "hanna",
         "from": "e3",
@@ -192,6 +182,10 @@ export default {
   "hiroFailureLines": [
     "両取りはかかったけど、相手の二階堂ヒロにすぐ取られてしまったわ。やり直しよ。"
   ],
+  // 初手でシェリーを1マスだけ進めた場合
+  "sherryOneStepFailureLines": ["私（ナノカ）を打ってちょうだい。"],
+  // 初手でシェリーを2マス進めた場合（1秒後にハンナが捕獲）
+  "sherryTwoStepFailureLines": ["その両取りだと、取られてしまうわね。"],
   "defaultFailureLines": [
     "（ここにその他の失敗時セリフを入れる）"
   ]
