@@ -255,21 +255,17 @@ export default function App(){
   if(activeGuide?.piece.type==="margo"){
    targets.clear();
    const {row,col,piece}=activeGuide;
-   for(const dr of [-1,0,1])for(const dc of [-1,0,1]){
-    if(dr===0&&dc===0)continue;
+   // 跳躍暗殺は横・斜め後ろ・真後ろの隣接敵を飛び越えて捕獲する。
+   // 敵がそのマスに来たと仮定し、飛び越えた先が盤内かつ空いている場合のみ赤。
+   const back=piece.side==="sente"?1:-1;
+   for(const [dr,dc] of [[0,-1],[0,1],[back,-1],[back,0],[back,1]]){
     const r=row+dr,c=col+dc;
+    const landingRow=row+2*dr,landingCol=col+2*dc;
     if(r<0||r>=6||c<0||c>=6)continue;
+    if(landingRow<0||landingRow>=6||landingCol<0||landingCol>=6)continue;
+    if(state.board[landingRow][landingCol])continue;
     const occupant=state.board[r][c];
-    if(!occupant)targets.set(`${r},${c}`,"magic");
-   }
-   // 合法な跳躍暗殺で捕獲される敵駒のみ赤く示す。
-   for(const action of guideActions){
-    if(action.category!=="magic"&&!action.magic)continue;
-    const target=action.captureAt??action.to;
-    if(!target)continue;
-    const [r,c]=target;
-    if(Math.abs(r-row)>1||Math.abs(c-col)>1)continue;
-    if(state.board[r][c]?.side!==piece.side)targets.set(`${r},${c}`,"magic");
+    if(!occupant||occupant.side!==piece.side)targets.set(`${r},${c}`,"magic");
    }
    // 通常移動が可能なマスは常に黄色を優先する。
    for(const action of guideActions){

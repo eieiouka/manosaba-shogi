@@ -17,24 +17,24 @@ export default {
    pageGuides:[guide("b1"),guide("b1")],
    playerMoveAt:1,
    correct:[{piece:"hanna",from:"b1",category:"move",toRank:2}],
-   failureLines:["関係ないことをしないでちょうだい。イライラするわ。"],
+   failureLines:["まずは黄色で表示された通常移動を試してちょうだい。"],
   },
   {
    // 直前の着手を教材上の初期盤面へ戻してから開始する。
    resetOnEnter:"initial",
    lines:[
-    "次は魔法「空中浮遊」の説明よ。盤面を初期配置に戻したわ。",
-    "空中浮遊の魔法を使って、2マス進んでみてちょうだい。",
+    "次は魔法「空中浮遊」よ。盤面を初期配置に戻したわ。",
+    "ハンナをb1からb3へ、2マス飛ばしてみてちょうだい。",
    ],
    pageGuides:[guide("b1"),guide("b1")],
    playerMoveAt:1,
    correct:[{piece:"hanna",from:"b1",to:"b3",magic:"浮遊"}],
-   afterMoveLines:["そうよ。これが2マス飛べる空中浮遊の魔法よ。"],
+   afterMoveLines:["そうよ。これが2マス飛べる空中浮遊の魔法ね。"],
    afterMovePageGuides:[[]],
    branches:[
-    {when:{piece:"hanna",from:"b1",category:"move"},lines:["今度は通常移動じゃなくて、空中浮遊の魔法を使ってちょうだい。"]},
+    {when:{piece:"hanna",from:"b1",category:"move"},lines:["今度は通常移動じゃなくて、空中浮遊を使ってちょうだい。"]},
    ],
-   failureLines:["関係ないことをしないでちょうだい。イライラするわ。"],
+   failureLines:["赤色のb3へ、空中浮遊を使って進んでちょうだい。"],
   },
   {
    // ナノカb2が途中にいてもハンナは飛び越えられる。
@@ -47,23 +47,23 @@ export default {
     turn:"sente",
    },
    lines:[
-    "今度は私（ナノカ）が遠野ハンナの前にいる盤面よ。",
-    "途中に味方の駒がいても、空中浮遊なら飛び越えられるわ。試しにやってみなさい。",
+    "今度は私（ナノカ）がb2にいる盤面よ。相手のナノカもe5に移したわ。",
+    "途中に味方の駒がいても、空中浮遊なら飛び越えられるわ。b3へ進めて。",
    ],
    pageGuides:[guide("b1"),guide("b1")],
    playerMoveAt:1,
    correct:[{piece:"hanna",from:"b1",to:"b3",magic:"浮遊"}],
    branches:[
-    {when:{piece:"hanna",from:"b1",category:"move"},lines:["ここは通常移動ではなく、空中浮遊で私を飛び越えてちょうだい。"]},
+    {when:{piece:"hanna",from:"b1",category:"move"},lines:["ここは通常移動ではなく、空中浮遊でナノカを飛び越えてちょうだい。"]},
    ],
-   failureLines:["関係ないことをしないでちょうだい。イライラするわ。"],
+   failureLines:["b2に駒がいても、浮遊でb3まで飛べるわよ。"],
   },
   {
    lines:[
     "ちゃんと飛び越えられたわね。",
-    "相手の宝生マーゴが遠野ハンナの前に出てきたわ。",
-    "遠野ハンナの利きを見て。2マス先に敵がいると、浮遊で移動できないわ。",
-    "途中の駒は飛び越えられても、着地点の駒は取れないのよ。覚えておきなさい。",
+    "相手の宝生マーゴがa6からb5に出てきたわ。",
+    "ハンナの利きを見て。2マス先に敵がいると、浮遊では取れないのよ。",
+    "途中の駒は飛び越えられても、着地点の駒は取れない。覚えておきなさい。",
    ],
    pageGuides:[guide("b3"),[],guide("b3"),guide("b3")],
    autoMove:{piece:"margo",from:"a6",to:"b5"},
@@ -73,8 +73,8 @@ export default {
   },
  ],
  successLines:[
-  "これで、遠野ハンナの動きが分かったかしら？",
-  "次の章からは、具体的な活用法を解説するわ。",
+  "通常移動と空中浮遊の違い、分かったかしら。",
+  "浮遊は途中の駒を飛び越えられるけど、着地点に駒がいると使えないのよ。",
  ],
  defaultFailureLines:["ハンナの利きを見て、もう一度考えてちょうだい。"],
 };
