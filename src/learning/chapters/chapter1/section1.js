@@ -18,8 +18,8 @@ export default {id:"nanoka-1", title:"ナノカの動かし方 基本", chapter:
     [{side:"sente",type:"nanoka",square:"a1"}], // 4ページ目
     [], // 5ページ目
     [], // 6ページ目
-    [], // 7ページ目
-    [], // 8ページ目
+    [{side:"sente",type:"nanoka",square:"a1"}], // 7ページ目
+    [{side:"sente",type:"nanoka",square:"a1"}], // 8ページ目
   ],
 
   // 1手目はナノカを自陣1段目から前へ1マス。後で棋譜配列にも置換可能。
