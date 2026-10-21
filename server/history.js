@@ -17,6 +17,6 @@ export function createHistory(file){
   if(e.type==='move')r.moves.push({at:e.at,side:e.side,action:e.action});
   if(e.type==='end'){r.finishedAt=e.at;r.result=e.result;}
  }
- function write(e){apply(e);try{appendFileSync(path,JSON.stringify(e)+'\n',{encoding:'utf8',mode:0o600});storageError=false}catch(error){storageError=true;console.error('対局履歴を保存できません:',error.message)}}
+ function write(e){try{appendFileSync(path,JSON.stringify(e)+'\n',{encoding:'utf8',mode:0o600});apply(e);storageError=false}catch(error){storageError=true;console.error('対局履歴を保存できません:',error.message)}}
  return {start:m=>write({type:'start',id:m.id,at:m.startedAt,nicknames:{...m.nicknames}}),move:(m,side,action)=>write({type:'move',id:m.id,at:Date.now(),side,action}),end:m=>write({type:'end',id:m.id,at:m.finishedAt,result:{...m.result}}),list:()=>[...records.values()],get:id=>records.get(id),get storageError(){return storageError}};
 }

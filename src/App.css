@@ -111,15 +111,15 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 @media (max-width:760px) and (hover:none) and (pointer:coarse) {
   .result-overlay__actions {
     display:grid;
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-    width:150%;
-    gap:2vw;
+    grid-template-columns:minmax(0,1fr);
+    width:min(70vw,260px);
+    gap:3vw;
   }
   .result-overlay__again,.result-overlay__friend {
     min-width:0;
     width:100%;
-    padding:2.5vw .8vw;
-    font-size:clamp(11px,3.1vw,15px);
+    padding:2.5vw 3vw;
+    font-size:clamp(14px,3.8vw,18px);
     letter-spacing:.035em;
     white-space:nowrap;
   }
