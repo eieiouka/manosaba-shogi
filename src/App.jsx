@@ -19,6 +19,7 @@ import {useLearningState} from "./learning/useLearningState.js";
 import {scriptedStep,scriptedLines,scriptedPlayerMatches,scriptedAutoMovePage,scriptedFailureLines,scriptedDisplayStep,scenePlayerMatches,scriptedFailureBranch} from "./learning/learningCore.js";
 import {LearningChapterHeading,LearningDialogue,LearningChapterSelect,LearningBackConfirm} from "./learning/LearningUI.jsx";
 import "./learning/learning.css";
+import "./learning/learning-disabled-nav.css";
 import "./online/auto-match.css";
 import "./online/v87-result-layout.css";
 
@@ -214,46 +215,42 @@ export default function App(){
  // 教材データの pageGuides はセリフページと同じ順序の配列。
  // [] は表示なし。旧教材の {0: {...}} 形式も引き続き使用可能。
  const learningPageGuide=(()=>{
-  if(mode!=="learning"||learningOutcome?.kind==="success")return null;
+  if(mode!=="learning")return [];
   const level=LEARNING_LEVELS[learningLevelIndex];
   const step=level.scenes?level.scenes[sceneIndex]:(level.steps?scriptedDisplayStep(level,learningHistory):null);
-  const guidePages=learningOutcome?.kind==="failure"
+  const guidePages=["failure","afterMove","success"].includes(learningOutcome?.kind)
    ? (learningOutcome.pageGuides??[])
    : learningOutcome?.kind==="interlude"
    ?(level.interludePageGuides??[])
    :(level.scenes?step?.pageGuides:(step?.lines == null ? level.pageGuides : (step?.pageGuides ?? level.pageGuides)));
   const entry=guidePages?.[learningDialogue];
-  return Array.isArray(entry)?(entry[0]??null):(entry??null);
+  return Array.isArray(entry)?entry:(entry?[entry]:[]);
  })();
- const learningGuidePiece=useMemo(()=>{
-  if(!learningPageGuide)return null;
-  const match=/^([a-f])([1-6])$/.exec(learningPageGuide.square||"");
-  if(!match)return null;
+ const learningGuidePieces=useMemo(()=>(learningPageGuide??[]).flatMap(guide=>{
+  const match=/^([a-f])([1-6])$/.exec(guide.square||"");
+  if(!match)return [];
   const row=6-Number(match[2]),col=match[1].charCodeAt(0)-97;
   const piece=state.board[row]?.[col];
-  if(!piece||piece.side!==learningPageGuide.side||piece.type!==learningPageGuide.type)return null;
-  return {row,col,piece};
- },[learningPageGuide,state]);
+  return piece?.side===guide.side&&piece.type===guide.type?[{row,col,piece}]:[];
+ }),[learningPageGuide,state]);
   const failedDropGuide=useMemo(()=>mode==="learning"?learningFailureGuide(LEARNING_LEVELS[learningLevelIndex],sceneIndex,learningHistory,learningOutcome,learningResponsePending,state):null,[mode,learningLevelIndex,sceneIndex,learningHistory,learningResponsePending,learningOutcome?.kind,state]);
- const activeGuide=pieceGuide?.row!=null&&pieceGuide?.col!=null?pieceGuide:(failedDropGuide??learningGuidePiece);
- const guideActions=useMemo(()=>{
-  if(!activeGuide)return[];
-  // A learning setup may intentionally omit Emma. Legal-move generation then
-  // rejects every move as "in check"; attack guides must use piece moves instead.
-  // The same rule is used for long-press and scripted learning highlights.
-  return generatePseudoActions(state,activeGuide.row,activeGuide.col);
- },[state,activeGuide]);
+ const activeGuides=pieceGuide?.row!=null&&pieceGuide?.col!=null?[pieceGuide]:(failedDropGuide?[failedDropGuide]:learningGuidePieces);
+ const activeGuide=activeGuides[0]??null;
  const guideTargets=useMemo(()=>{
   const targets=new Map();
+  // 黄色（通常移動）は赤色（魔法）より常に優先。
+  const mark=(key,color)=>{if(color==="normal"||!targets.has(key))targets.set(key,color)};
+  for(const activeGuide of activeGuides){
+  const guideActions=generatePseudoActions(state,activeGuide.row,activeGuide.col);
   for(const action of guideActions){
    const key=`${action.to[0]},${action.to[1]}`;
-   if(action.category==="magic"||action.longForward)targets.set(key,"magic");
-   else targets.set(key,"normal");
+   if(action.category==="magic"||action.longForward)mark(key,"magic");
+   else mark(key,"normal");
   }
   // マーゴ共通ガイド：通常移動は黄色、周囲の空マスは赤。
   // 敵駒のあるマスは跳躍暗殺が合法な場合のみ赤。味方駒は表示しない。
   if(activeGuide?.piece.type==="margo"){
-   targets.clear();
+   
    const {row,col,piece}=activeGuide;
    // 跳躍暗殺は横・斜め後ろ・真後ろの隣接敵を飛び越えて捕獲する。
    // 敵がそのマスに来たと仮定し、飛び越えた先が盤内かつ空いている場合のみ赤。
@@ -265,12 +262,12 @@ export default function App(){
     if(landingRow<0||landingRow>=6||landingCol<0||landingCol>=6)continue;
     if(state.board[landingRow][landingCol])continue;
     const occupant=state.board[r][c];
-    if(!occupant||occupant.side!==piece.side)targets.set(`${r},${c}`,"magic");
+    if(!occupant||occupant.side!==piece.side)mark(`${r},${c}`,"magic");
    }
    // 通常移動が可能なマスは常に黄色を優先する。
    for(const action of guideActions){
     if(action.category==="magic"||action.magic)continue;
-    targets.set(`${action.to[0]},${action.to[1]}`,"normal");
+    mark(`${action.to[0]},${action.to[1]}`,"normal");
    }
   }
   // Show Nanoka's shooting range even when no enemy occupies the target.
@@ -282,11 +279,12 @@ export default function App(){
     if(targetRow<0||targetRow>=6||targetCol<0||targetCol>=6)continue;
     if(state.board[row+forward][col+dc/2])continue;
     if(state.board[targetRow][targetCol]?.side===piece.side)continue;
-    targets.set(`${targetRow},${targetCol}`,"magic");
+    mark(`${targetRow},${targetCol}`,"magic");
    }
   }
+  }
   return targets;
- },[guideActions,activeGuide,state]);
+ },[activeGuides,state]);
 
  useEffect(()=>{worker.current=new Worker(new URL("./game/ai.worker.js",import.meta.url),{type:"module"});return()=>worker.current?.terminate()},[]);
   // BGM is selected from the visible game mode, not from queue status alone.
@@ -397,7 +395,7 @@ export default function App(){
  // 正解後の解説を終えた場合も、通常の正解手と同じ共通処理で次のシーンへ。
  function enterNextLearningScene(level,index,historyLength,timelineLength){
   if(index===level.scenes.length-1){
-   setLearningOutcome({kind:"success",lines:level.successLines});setLearningDialogue(0);return;
+   setLearningOutcome({kind:"success",lines:level.successLines,pageGuides:level.successPageGuides??[]});setLearningDialogue(0);return;
   }
   const nextScene=level.scenes[index+1];
   if(nextScene?.resetOnEnter){
@@ -469,7 +467,7 @@ export default function App(){
      setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,step,record)});
      setLearningDialogue(0);
     }else if(history.length===level.steps.length){
-     setLearningOutcome({kind:"success",lines:level.successLines});setLearningDialogue(0);
+     setLearningOutcome({kind:"success",lines:level.successLines,pageGuides:level.successPageGuides??[]});setLearningDialogue(0);
     }else{setLearningDialogue(0);}
     return;
    }
@@ -614,14 +612,14 @@ export default function App(){
   }
   if(mode==="learning"&&learningLevel.scenes&&!learningOutcome){
    const scene=learningLevel.scenes[sceneIndex];
-   if(scene&&!scene.correct?.length&&learningIsLast&&sceneAutoDone){setLearningOutcome({kind:"success",lines:learningLevel.successLines});setLearningDialogue(0);return}
+   if(scene&&!scene.correct?.length&&learningIsLast&&(!scene.autoMove||sceneAutoDone)){enterNextLearningScene(learningLevel,sceneIndex,learningHistory.length,timeline.length);return}
   }
   if(mode==="learning"&&learningLevel.interludeRule&&learningOutcome?.kind==="interlude"&&learningDialogue===0&&learningHistory.length===learningLevel.interludeRule.afterMove){
    learningAutoMovingRef.current=true;setLearningAutoMoving(true);
   }
   if(mode==="learning"&&learningLevel.steps&&!learningOutcome&&
      learningHistory.length===learningLevel.steps.length&&learningIsLast){
-   setLearningOutcome({kind:"success",lines:learningLevel.successLines});
+   setLearningOutcome({kind:"success",lines:learningLevel.successLines,pageGuides:learningLevel.successPageGuides??[]});
    setLearningDialogue(0);return;
   }
   setLearningDialogue(n=>Math.min(learningLines.length-1,n+1));
@@ -778,6 +776,12 @@ export default function App(){
   setLearningDialogue(Math.max(0,LEARNING_LEVELS[learningLevelIndex].lines.length-1));
  }
  function previousLearningPage(){
+  if(learningOutcome?.kind==="success"){
+   // Success dialogue is a boundary: never return to a prior scene.
+   // The player may navigate backward only inside successLines.
+   if(learningDialogue>0)setLearningDialogue(n=>n-1);
+   return;
+  }
   if(learningLevel.scenes){
    if(learningAutoMovingRef.current||learningOutcome)return;
    const scene=learningLevel.scenes[sceneIndex];
@@ -992,7 +996,7 @@ export default function App(){
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
   {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
-  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&sceneAutoDone)||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
+  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&(!learningLevel.scenes[sceneIndex]?.autoMove||sceneAutoDone))||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
   {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={requestLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
   {mode==="learning"&&confirmLearningBack&&<LearningBackConfirm onConfirm={leaveLearning} onCancel={()=>setConfirmLearningBack(false)}/>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 

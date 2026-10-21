@@ -1,0 +1,9 @@
+/* Disabled dialogue arrows must look disabled, including the first success page. */
+.app-shell--learning .learning-dialogue__nav button:disabled {
+  background: #171411;
+  color: #70665d;
+  border-color: #45392e;
+  opacity: 0.48;
+  cursor: default;
+  box-shadow: none;
+}

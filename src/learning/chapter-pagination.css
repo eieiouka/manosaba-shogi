@@ -12,3 +12,14 @@
 .learning-chapter-pagination button:hover:not(:disabled) {background:#514031;}
 .learning-chapter-pagination button:disabled {opacity:.35;cursor:default;}
 .learning-chapter-pagination button:focus-visible {outline:3px solid white;outline-offset:2px;}
+
+/* Disabled back/forward controls match the existing dimmed navigation style. */
+.app-shell--learning .learning-dialogue__nav button:disabled,
+.app-shell--learning .learning-dialogue__nav button.learning-nav-disabled {
+  opacity: .35 !important;
+  background: #171411 !important;
+  border-color: #45392e !important;
+  color: #70665d !important;
+  box-shadow: none !important;
+  cursor: default !important;
+}
