@@ -65,7 +65,7 @@ export default {
     "遠野ハンナの利きを見て。2マス先に敵がいると、空中浮遊で進めないわ。",
     "途中の駒は飛び越えられても、着地点の駒は取れない。覚えておきなさい。",
    ],
-   pageGuides:[guide("b3"),[],guide("b3"),guide("b3")],
+   pageGuides:[[],[],guide("b3"),guide("b3")],
    autoMove:{piece:"margo",from:"a6",to:"b5"},
    autoMoveAt:1,
    autoDelayMs:250,
