@@ -168,16 +168,31 @@ export function numericCasualAction(s,{difficulty=3,openingActive=false,cpuOwnMo
   const side=p.turn;
   const options=moves.map(m=>{
     const u=make(p,m);
-    const end=terminal(p,generate(p,true));
+    const opponentMoves=generate(p);
+    const end=terminal(p,opponentMoves);
+    // Only inspect the opponent's immediate captures. No deep search.
+    // The captured piece is read before making the reply, including ranged magic.
+    let worstCapture=0;
+    if(difficulty>5&&!end){
+      for(const reply of opponentMoves){
+        if(reply.capture<0)continue;
+        const victim=p.b[reply.capture];
+        if(!victim||sideOf(victim)!==side)continue;
+        const type=typeOf(victim);
+        const loss=type===4?1500:(HV[type]||350)+(promoted(victim)?140:0);
+        if(loss>worstCapture)worstCapture=loss;
+      }
+    }
     const raw=end?.winner===side?1000000:end?.winner===-side?-1000000:evaluate(p,{cpuSide:side,zeroEmmaProgress:cpuOwnMoves<3});
     undo(p,u);
     const bonus=openingActive?openingBonus(p,m):0;
-    return {m,score:(side===SENTE?raw:-raw)+bonus,win:end?.winner===side};
+    const safetyPenalty=difficulty<=5?0:1.3;
+    return {m,score:(side===SENTE?raw:-raw)+bonus-worstCapture*safetyPenalty,win:end?.winner===side};
   });
   const wins=options.filter(x=>x.win);
   if(wins.length){const pick=wins[Math.floor(Math.random()*wins.length)];return {action:toAction(s,pick.m),score:pick.score,depth:1,nodes:moves.length,engine:'casual',proven:false}}
   const best=Math.max(...options.map(x=>x.score));
-  const settings=difficulty<=3?{gap:650,temperature:370,random:0.65}:difficulty<=5?{gap:440,temperature:260,random:0.45}:{gap:280,temperature:190,random:0.25};
+  const settings=difficulty<=3?{gap:650,temperature:370,random:0.65}:difficulty<=5?{gap:280,temperature:190,random:0.25}:{gap:125,temperature:80,random:0.08};
   // Large blunders are filtered, but the CPU deliberately overlooks smaller losses.
   const pool=options.filter(x=>best-x.score<=settings.gap);
   let pick;

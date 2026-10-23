@@ -85,7 +85,6 @@ function DifficultyDialog({onChoose,onCancel}){
    <div className="difficulty-options">{DIFFICULTIES.map(item=><button key={item.depth} type="button" onClick={()=>onChoose(item.depth)}>
     <strong>{item.label}</strong>
    </button>)}</div>
-   <p>※どの難易度も初心者向けです</p>
    <button className="difficulty-cancel" type="button" onClick={onCancel}>戻る</button>
   </section>
  </div>;
