@@ -158,3 +158,35 @@ function proveRoot(p,attacker,d,ctx){if(p.turn!==attacker)return{result:prove(p,
 function toAction(s,m){if(m.kind===4){let handIndex=s.hands[s.turn].findIndex(q=>TYPES[q.type]===m.type);return{category:"drop",piece:s.hands[s.turn][handIndex],handIndex,to:[row(m.to),col(m.to)],promote:false}}const piece=s.board[row(m.from)][col(m.from)],a={category:m.magic&&m.magic!=="long"?"magic":"move",piece,from:[row(m.from),col(m.from)],to:[row(m.to),col(m.to)],promote:m.promote};if(m.magic&&m.magic!=="long")a.magic=m.magic;if(m.kind===1){a.captureAt=[row(m.capture),col(m.capture)];a.movePiece=false}else if(m.kind===2)a.swap=true;else if(m.kind===3){a.captureAt=[row(m.capture),col(m.capture)];a.movePiece=true}else if(m.magic==="浮遊"){a.jumpOver=[(row(m.from)+row(m.to))/2,col(m.from)];a.movePiece=true}else if(piece.type==="sherry"&&m.magic===""){const target=s.board[row(m.to)][col(m.to)];if(!piece.promoted&&target){a.category="magic";a.magic="サイドステップ";a.captureAt=[row(m.to),col(m.to)];a.movePiece=true}}if(m.magic==="long")a.longForward=true;return a}
 export function numericLegalActions(s){const p=fromState(s);return generate(p).map(m=>toAction(s,m))}
 export function numericBestAction(s,seenEntries=[],depth=7,{timeLimitMs=10000,tt=null,minDepth=5,openingActive=false,cpuOwnMoves=0}={}){const p=fromState(s);p.cpuSide=p.turn;p.cpuMoves=cpuOwnMoves;const started=performance.now(),hard=started+timeLimitMs,ctx={tt:tt??createTranspositionTable(),proof:new Map(),nodes:0,deadline:hard,history:new Map(),rootBest:0,qDepth:2,openingActive,cpuSide:p.cpuSide,zeroEmmaProgress:cpuOwnMoves<3,sourceState:s,openingDebug:[]},numericSeen=new Set(seenEntries);let best=null,done=0,proven=false,previous=0;for(let d=1;d<=depth;d+=2){ctx.deadline=d<=minDepth?Infinity:hard;try{let x;if(d===1)x=root(p,d,ctx,numericSeen);else{x=root(p,d,ctx,numericSeen,previous-180,previous+180);if(x&&(x.score<=previous-180||x.score>=previous+180))x=root(p,d,ctx,numericSeen)}if(x){best=x;previous=x.score;done=d;const currentWinning=p.turn===SENTE?x.score>=900000:x.score<=-900000;if(currentWinning){ctx.deadline=hard;const proof=proveRoot(p,p.turn,d,ctx);if(proof.result===1){proven=true;best.score=x.score;if(proof.move)best.move=proof.move;break}}}}catch(e){if(e!==TIMEOUT)throw e;break}}if(!best)return null;if(!proven&&Math.abs(best.score)>=900000){ctx.deadline=hard;const forcedScore=best.score,attacker=forcedScore>0?SENTE:GOTE;best.score=evalPos(p,ctx);try{const proof=proveRoot(p,attacker,done+2,ctx);if(proof.result===1){proven=true;best.score=forcedScore;if(proof.move&&attacker===p.turn)best.move=proof.move}}catch(e){if(e!==TIMEOUT)throw e}}return{action:toAction(s,best.move),score:proven?(best.score>0?20000:-20000):best.score,depth:done,nodes:ctx.nodes,proven,...(openingActive?{openingDebug:ctx.openingDebug,openingBonus:best.bonus??0}: {})}}
+
+// Casual CPU: one-ply static evaluation with intentionally imperfect choices.
+// The learned evaluation and root-only opening bonuses remain unchanged.
+export function numericCasualAction(s,{difficulty=3,openingActive=false,cpuOwnMoves=0}={}){
+  const p=fromState(s);p.cpuSide=p.turn;p.cpuMoves=cpuOwnMoves;
+  const moves=generate(p);
+  if(!moves.length)return null;
+  const side=p.turn;
+  const options=moves.map(m=>{
+    const u=make(p,m);
+    const end=terminal(p,generate(p,true));
+    const raw=end?.winner===side?1000000:end?.winner===-side?-1000000:evaluate(p,{cpuSide:side,zeroEmmaProgress:cpuOwnMoves<3});
+    undo(p,u);
+    const bonus=openingActive?openingBonus(p,m):0;
+    return {m,score:(side===SENTE?raw:-raw)+bonus,win:end?.winner===side};
+  });
+  const wins=options.filter(x=>x.win);
+  if(wins.length){const pick=wins[Math.floor(Math.random()*wins.length)];return {action:toAction(s,pick.m),score:pick.score,depth:1,nodes:moves.length,engine:'casual',proven:false}}
+  const best=Math.max(...options.map(x=>x.score));
+  const settings=difficulty<=3?{gap:650,temperature:370,random:0.65}:difficulty<=5?{gap:440,temperature:260,random:0.45}:{gap:280,temperature:190,random:0.25};
+  // Large blunders are filtered, but the CPU deliberately overlooks smaller losses.
+  const pool=options.filter(x=>best-x.score<=settings.gap);
+  let pick;
+  if(Math.random()<settings.random)pick=pool[Math.floor(Math.random()*pool.length)];
+  else{
+    const weights=pool.map(x=>Math.exp((x.score-best)/settings.temperature));
+    let ticket=Math.random()*weights.reduce((a,b)=>a+b,0);
+    pick=pool[pool.length-1];
+    for(let i=0;i<pool.length;i++){ticket-=weights[i];if(ticket<=0){pick=pool[i];break}}
+  }
+  return {action:toAction(s,pick.m),score:side===SENTE?pick.score:-pick.score,depth:1,nodes:moves.length,engine:'casual',proven:false};
+}

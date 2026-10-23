@@ -1,4 +1,4 @@
-import {bestAction,createTranspositionTable} from "./aiEngine.js";
+import {bestAction,casualAction,createTranspositionTable} from "./aiEngine.js";
 import {generateAllLegalActions} from "./rules.js";
 import {fairyMoveToAction,stateToFairyFen} from "./fairyCodec.js";
 
@@ -86,14 +86,19 @@ self.onmessage=async({data})=>{
   const token=++ponderToken;
   if(data.type==="reset"){sharedTT.clear();wasmEngine?.reset_engine?.();fairyWorker?.postMessage({type:"reset"});deepestPonder=1;return}
   if(data.type==="ponder"){
-    if(data.maxDepth===5)return;
+    return; // No pondering for casual CPU.
+   if(data.maxDepth===5)return;
     deepestPonder=1;
     if(await fairyReady)return;
     setTimeout(()=>ponder(data.state,data.seen,token,data.maxDepth??UNBOUNDED_DEPTH),0);
     return
   }
   try{
-    const targetDepth=data.maxDepth==null?UNBOUNDED_DEPTH:Math.max(1,Math.min(UNBOUNDED_DEPTH,Math.trunc(Number(data.maxDepth)||UNBOUNDED_DEPTH)));
+    // CPU-only weak mode. No Fairy/WASM search, quiescence or background pondering.
+   const casual=casualAction(data.state,{difficulty:data.minDepth??3,openingActive:data.openingActive,cpuOwnMoves:data.cpuOwnMoves??0});
+   self.postMessage({id:data.id,result:casual});
+   return;
+   const targetDepth=data.maxDepth==null?UNBOUNDED_DEPTH:Math.max(1,Math.min(UNBOUNDED_DEPTH,Math.trunc(Number(data.maxDepth)||UNBOUNDED_DEPTH)));
     const timeLimitMs=Math.max(500,data.timeLimitMs??500);
     const minDepth=Math.max(1,Math.min(targetDepth,31,Math.trunc(Number(data.minDepth)||15)));
     const startedAt=performance.now();

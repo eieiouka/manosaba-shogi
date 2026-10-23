@@ -85,7 +85,7 @@ function DifficultyDialog({onChoose,onCancel}){
    <div className="difficulty-options">{DIFFICULTIES.map(item=><button key={item.depth} type="button" onClick={()=>onChoose(item.depth)}>
     <strong>{item.label}</strong>
    </button>)}</div>
-   <p>※難易度が高いほど、処理が重くなります</p>
+   <p>※どの難易度も初心者向けです</p>
    <button className="difficulty-cancel" type="button" onClick={onCancel}>戻る</button>
   </section>
  </div>;
@@ -104,7 +104,7 @@ function HowToPlayDialog({onClose}){
  return <div className="how-to-overlay" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)onClose()}}>
   <section className="how-to-dialog" role="dialog" aria-modal="true" aria-labelledby="how-to-title">
    <div className="how-to-dialog__heading"><h2 id="how-to-title">How to play</h2><button type="button" onClick={onClose} aria-label="閉じる">×</button></div>
-   <p>桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。</p>
+   <p>桜羽エマを取られたら負けです。桜羽エマが魔女化すると、特殊勝利できます。</p>
    <p>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。</p>
    <p>取った駒は打てますが、敵陣最下段には打てません。</p>
    <p className="how-to-dialog__longpress">長押しで駒の能力を見れます。</p>
