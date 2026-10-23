@@ -842,6 +842,10 @@ export default function App(){
   setLearningDialogue(Math.max(0,LEARNING_LEVELS[learningLevelIndex].lines.length-1));
  }
  function previousLearningPage(){
+  if(learningOutcome?.kind==="afterMove"){
+   if(learningDialogue>0)setLearningDialogue(n=>n-1);
+   return;
+  }
   if(learningOutcome?.kind==="success"){
    // Success dialogue is a boundary: never return to a prior scene.
    // The player may navigate backward only inside successLines.
