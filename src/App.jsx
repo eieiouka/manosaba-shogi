@@ -146,6 +146,7 @@ export default function App(){
  const [learningAutoMoving,setLearningAutoMoving]=useState(false);
   const [learningResponsePending,setLearningResponsePending]=useState(null);
  const [sceneIndex,setSceneIndex]=useState(0),[sceneAutoDone,setSceneAutoDone]=useState(false);
+  const [learningTryDemoDone,setLearningTryDemoDone]=useState(false);
  const sceneBusy=useRef(false),sceneTimers=useRef([]),sceneSnapshots=useRef([]),scenePlayerSnapshots=useRef([]);
  const clearScene=()=>{sceneTimers.current.forEach(clearTimeout);sceneTimers.current=[];sceneBusy.current=false;learningAutoMovingRef.current=false;setLearningAutoMoving(false);};
  const learningAutoMovingRef=useRef(false);
@@ -166,7 +167,8 @@ export default function App(){
   setTimeline([data.state]);setStarted(true);
  },()=>{
  });
- const result=useMemo(()=>mode==="online"?online.match?.result:mode==="learning"?learningTerminal(LEARNING_LEVELS[learningLevelIndex],state,timeline,()=>terminalResult(state)??repetitionResult(state,timeline)):terminalResult(state)??repetitionResult(state,timeline),[state,timeline,mode,online.match,learningLevelIndex]);
+  const learningTryDemo=mode==="learning"&&LEARNING_LEVELS[learningLevelIndex]?.id==="hanna-5"&&sceneIndex===1&&learningTryDemoDone;
+  const result=useMemo(()=>mode==="online"?online.match?.result:mode==="learning"?(learningTryDemo?{winner:"gote",reason:"ema-safe-try"}:learningTerminal(LEARNING_LEVELS[learningLevelIndex],state,timeline,()=>terminalResult(state)??repetitionResult(state,timeline))):terminalResult(state)??repetitionResult(state,timeline),[state,timeline,mode,online.match,learningLevelIndex,learningTryDemo]);
  const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
@@ -417,7 +419,7 @@ export default function App(){
    sceneSnapshots.current[index+1]={t:timelineLength,h:historyLength};
   }
   setSelected(null);setHandType(null);setPieceGuide(null);
-  setLearningOutcome(null);setSceneIndex(index+1);setSceneAutoDone(false);setLearningDialogue(0);
+  setLearningTryDemoDone(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setLearningOutcome(null);setSceneIndex(index+1);setSceneAutoDone(false);setLearningDialogue(0);
  }
  async function commitAction(action,before){
   const generation=learningGeneration.current;
@@ -458,7 +460,9 @@ export default function App(){
     if(!scenePlayerMatches(scene,record)){
      const branch=scriptedFailureBranch(scene,record);
       if(branch?.response){setLearningResponsePending({...branch,sceneFailure:true});return;}
-     setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,scene,record),pageGuides:branch?.pageGuides??[]});
+     const hanna5DropGuide=level.id==='hanna-5'&&sceneIndex===2&&record.piece==='hanna'&&record.category==='drop'&&!['c3','e3'].includes(record.to);
+     const failurePageGuides=hanna5DropGuide?[[{side:'sente',type:'hanna',square:record.to}]]:branch?.pageGuides??[];
+     setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,scene,record),pageGuides:failurePageGuides});
      setLearningDialogue(0);
     }
     else{
@@ -572,6 +576,48 @@ export default function App(){
    },action.magic==="銃撃"?1080:600));
   },scene.autoDelayMs??250);sceneTimers.current.push(timer);
  },[mode,learningLevelIndex,sceneIndex,learningDialogue,sceneAutoDone,learningOutcome?.kind]);
+  // 第2章5節の追跡実演。通常の着手エンジンで11手を順に再生する。
+  useEffect(()=>{
+   const level=LEARNING_LEVELS[learningLevelIndex];
+   const scene=level.scenes?.[sceneIndex];
+   if(mode!=="learning"||!scene?.autoSequence||sceneAutoDone||learningOutcome)return;
+   const generation=learningGeneration.current;
+   let cancelled=false;
+   let position=state;
+   const timers=[];
+   const wait=ms=>new Promise(resolve=>timers.push(setTimeout(resolve,ms)));
+   learningAutoMovingRef.current=true;setLearningAutoMoving(true);
+   const run=async()=>{
+    for(let i=0;i<scene.autoSequence.length;i++){
+     await wait(i===0?(scene.firstDelayMs??1000):(scene.intervalMs??700));
+     if(cancelled||generation!==learningGeneration.current)return;
+     const spec=scene.autoSequence[i];
+     const before={...position,turn:spec.side};
+     const action=learningActions(level,before).find(a=>{
+      const record=learningMoveRecord(a,before);
+      return Object.entries(spec).every(([k,v])=>!["side","piece","from","to","category","magic"].includes(k)||record[k]===v);
+     });
+     if(!action){
+      setLearningOutcome({kind:"failure",lines:[`自動手順${i+1}手目（${spec.piece} ${spec.from||"打"}→${spec.to}）が実行できないわ。盤面を確認してちょうだい。`]});
+      setLearningDialogue(0);learningAutoMovingRef.current=false;setLearningAutoMoving(false);return;
+     }
+     beginMotion(action,before);
+     position=applyLegalAction(before,action);
+     setTimeline(t=>[...t,position]);
+     setLearningHistory(h=>[...h,learningMoveRecord(action,before)]);
+    }
+    await wait(650);
+    if(cancelled||generation!==learningGeneration.current)return;
+    setSceneAutoDone(true);setLearningTryDemoDone(true);
+    // The existing try beam and falling Emma effects run from result.
+    await wait(7000);
+    if(cancelled||generation!==learningGeneration.current)return;
+    learningAutoMovingRef.current=false;setLearningAutoMoving(false);
+   };
+   run();
+   // Resetting the chapter increments learningGeneration, which invalidates pending moves.
+   return()=>{cancelled=true;timers.forEach(clearTimeout)};
+  },[mode,learningLevelIndex,sceneIndex,learningOutcome?.kind]);
  // Scripted opponent actions are bound to a specific dialogue page, not to a fixed one-page step.
  // Lock synchronously on entering the trigger page, and never cancel a pending move on re-render.
  const scriptedAutoRunning=useRef(false);
@@ -624,7 +670,7 @@ export default function App(){
   }
   if(mode==="learning"&&learningLevel.scenes&&!learningOutcome){
    const scene=learningLevel.scenes[sceneIndex];
-   if(scene&&!scene.correct?.length&&learningIsLast&&(!scene.autoMove||sceneAutoDone)){enterNextLearningScene(learningLevel,sceneIndex,learningHistory.length,timeline.length);return}
+   if(scene&&!scene.correct?.length&&learningIsLast&&(!scene.autoMove&&!scene.autoSequence||sceneAutoDone)){enterNextLearningScene(learningLevel,sceneIndex,learningHistory.length,timeline.length);return}
   }
   if(mode==="learning"&&learningLevel.interludeRule&&learningOutcome?.kind==="interlude"&&learningDialogue===0&&learningHistory.length===learningLevel.interludeRule.afterMove){
    learningAutoMovingRef.current=true;setLearningAutoMoving(true);
@@ -711,7 +757,7 @@ export default function App(){
  function startLearning(){
    setLearningResponsePending(null);
    setLearningStarts(n=>n+1);
-  clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
+  clearScene();setLearningTryDemoDone(false);setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
   learningGeneration.current++;
   setLearningLevelIndex(0);
   request.current++;worker.current?.postMessage({type:"reset"});
@@ -722,7 +768,7 @@ export default function App(){
  }
  function restoreLearningLevel(levelIndex=learningLevelIndex){
   setLearningResponsePending(null);
-  clearScene();setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
+  clearScene();setLearningTryDemoDone(false);setSceneIndex(0);setSceneAutoDone(false);sceneSnapshots.current=[{t:1,h:0}];scenePlayerSnapshots.current=[];
   learningAutoMovingRef.current=false;setLearningAutoMoving(false);interludeAutoPending.current=false;
   learningGeneration.current++;
   request.current++;worker.current?.postMessage({type:"reset"});
@@ -1009,7 +1055,7 @@ export default function App(){
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
   {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
-  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&(!learningLevel.scenes[sceneIndex]?.autoMove||sceneAutoDone))||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
+  {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&(!learningLevel.scenes[sceneIndex]?.autoMove&&!learningLevel.scenes[sceneIndex]?.autoSequence||sceneAutoDone))||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
   {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={requestLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
   {mode==="learning"&&confirmLearningBack&&<LearningBackConfirm onConfirm={leaveLearning} onCancel={()=>setConfirmLearningBack(false)}/>}
   {pieceGuide&&<PieceGuide piece={pieceGuide.piece} onClose={()=>setPieceGuide(null)}/>} 
