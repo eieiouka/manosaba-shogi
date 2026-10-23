@@ -447,6 +447,7 @@ export default function App(){
     scenePlayerSnapshots.current[sceneIndex]={t:timeline.length,h:learningHistory.length};
     if(!scenePlayerMatches(scene,record)){
      const branch=scriptedFailureBranch(scene,record);
+      if(branch?.response){setLearningResponsePending({...branch,sceneFailure:true});return;}
      setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,scene,record),pageGuides:branch?.pageGuides??[]});
      setLearningDialogue(0);
     }
@@ -497,11 +498,12 @@ export default function App(){
     const action=learningResponseAction(level,before,branch.response);
     if(!action){setLearningResponsePending(null);setLearningOutcome({kind:"failure",lines:["（失敗：相手の自動着手を確認してください）"]});setLearningDialogue(0);return;}
     beginMotion(action,before);
-    setTimeline(t=>[...t,applyLegalAction(before,action)]);
-    finishTimer=setTimeout(()=>{
+     setTimeline(t=>[...t,applyLegalAction(before,action)]);
+     if(branch.sceneFailure)setLearningHistory(h=>[...h,learningMoveRecord(action,before)]);
+     finishTimer=setTimeout(()=>{
      if(generation!==learningGeneration.current)return;
      setLearningResponsePending(null);
-     setLearningOutcome({kind:"failure",lines:branch.lines??level[branch.linesKey],pageGuides:branch.pageGuides??[]});
+      setLearningOutcome({kind:"failure",sceneFailure:Boolean(branch.sceneFailure),lines:branch.lines??level[branch.linesKey],pageGuides:branch.pageGuides??[]});
      setLearningDialogue(0);
     },branch.finishDelayMs??750);
    },branch.delayMs??1000);
@@ -749,7 +751,8 @@ export default function App(){
       setLearningResponsePending(null);return;
      }
     learningGeneration.current++;clearScene();motionSequence.current++;motionFxRef.current=null;setMotionFx(null);
-    setTimeline(t=>t.slice(0,-1));setLearningHistory(h=>h.slice(0,-1));setLearningOutcome(null);
+     const rollback=learningOutcome?.sceneFailure?2:1;
+     setTimeline(t=>t.slice(0,-rollback));setLearningHistory(h=>h.slice(0,-rollback));setLearningOutcome(null);
     setLearningDialogue(learningLevel.scenes[sceneIndex].playerMoveAt);setSelected(null);setHandType(null);setPieceGuide(null);
    }return;
   }

@@ -7,5 +7,6 @@ import section5 from "./chapters/chapter1/section5.js";
 import hanna1 from "./chapters/chapter2/section1.js";
 import hanna2 from "./chapters/chapter2/section2.js";
 import hanna3 from "./chapters/chapter2/section3.js";
-export const LEARNING_LEVELS=[section1,section2,section3,section4,section5,hanna1,hanna2,hanna3];
+import hanna4 from "./chapters/chapter2/section4.js";
+export const LEARNING_LEVELS=[section1,section2,section3,section4,section5,hanna1,hanna2,hanna3,hanna4];
 export {learningMoveRecord,learningStartState,evaluateLearningHistory,learningStepMatches} from "./learningEngine.js";
