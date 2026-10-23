@@ -33,13 +33,13 @@ export default {
  scenes:[
   {
    lines:[
-    '遠野ハンナを持ち駒にしたら、相手の可愛いナノちゃん（私）を狙うのが手筋よ。',
+    '遠野ハンナを持ち駒にしたら、私（可愛いナノちゃん）を狙うのが手筋よ。',
     'どこに遠野ハンナを打つのが良いか、考えてみなさい。',
    ],
    pageGuides:[[],[guide('nanoka','e5','gote')]],playerMoveAt:1,
    correct:[{piece:'hanna',side:'sente',category:'drop',to:'f4'}],
    branches:[
-    {when:{piece:'hanna',category:'drop',to:'d4'},response:{piece:'nanoka',from:'e5',to:'f5'},delayMs:1000,finishDelayMs:800,lines:['惜しいけど、そこに打つと私に逃げられるわ。']},
+    {when:{piece:'hanna',category:'drop',to:'d4'},response:{piece:'nanoka',from:'e5',to:'f5'},delayMs:1000,finishDelayMs:800,pendingGuide:{side:'sente',type:'hanna',square:'d4'},pageGuides:[guide('hanna','d4')],lines:['惜しいけど、そこに打つと私に逃げられるわ。']},
     {when:{piece:'hanna',category:'drop',to:'e4'},response:{piece:'nanoka',from:'e5',to:'e4'},delayMs:1000,finishDelayMs:800,lines:['そこに打ったら、タダで取られるわよ。']},
     {when:{piece:'hanna',category:'drop'},lines:['そこに打っても、何も起こらないわよ。']},
    ],
@@ -53,7 +53,7 @@ export default {
     '駒は取れないけど、遠野ハンナをさらに進めましょう。',
    ],
    autoMove:{piece:'nanoka',from:'e5',to:'d5'},autoMoveAt:2,autoDelayMs:800,
-   pageGuides:[[],[],[],[guide('hanna','f4')]],playerMoveAt:3,
+   pageGuides:[guide('hanna','f4'),guide('hanna','f4'),guide('hanna','f4'),guide('hanna','f4')],playerMoveAt:3,
    correct:[{piece:'hanna',from:'f4',to:'f5',category:'move'}],
    branches:[
     {when:{piece:'hanna',from:'f4',to:'f6',magic:'浮遊'},lines:['そこに移動するのも悪くないけど、遠野ハンナが盤面隅で使いづらいわ。']},

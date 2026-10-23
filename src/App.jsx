@@ -234,7 +234,17 @@ export default function App(){
   return piece?.side===guide.side&&piece.type===guide.type?[{row,col,piece}]:[];
  }),[learningPageGuide,state]);
   const failedDropGuide=useMemo(()=>mode==="learning"?learningFailureGuide(LEARNING_LEVELS[learningLevelIndex],sceneIndex,learningHistory,learningOutcome,learningResponsePending,state):null,[mode,learningLevelIndex,sceneIndex,learningHistory,learningResponsePending,learningOutcome?.kind,state]);
- const activeGuides=pieceGuide?.row!=null&&pieceGuide?.col!=null?[pieceGuide]:(failedDropGuide?[failedDropGuide]:learningGuidePieces);
+ // Keep the misplaced Hanna's range visible while the scripted opponent reply is pending.
+  const pendingResponseGuide=(()=>{
+   const spec=learningResponsePending?.pendingGuide;
+   if(mode!=="learning"||!spec)return null;
+   const match=/^([a-f])([1-6])$/.exec(spec.square||"");
+   if(!match)return null;
+   const row=6-Number(match[2]),col=match[1].charCodeAt(0)-97;
+   const piece=state.board[row]?.[col];
+   return piece?.type===spec.type&&piece.side===spec.side?{row,col,piece}:null;
+  })();
+  const activeGuides=pieceGuide?.row!=null&&pieceGuide?.col!=null?[pieceGuide]:(pendingResponseGuide?[pendingResponseGuide]:(failedDropGuide?[failedDropGuide]:learningGuidePieces));
  const activeGuide=activeGuides[0]??null;
  const guideTargets=useMemo(()=>{
   const targets=new Map();
