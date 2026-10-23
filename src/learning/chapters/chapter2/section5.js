@@ -79,9 +79,9 @@ export default {
  scenes:[
   {
    lines:[
-    '遠野ハンナを持ち駒にしても、迂闊にエマに王手をかけるのは良くないわ。',
+    '遠野ハンナを持ち駒にしても、迂闊に桜羽エマに王手をかけるのは良くないわ。',
     '早速、その見本を見てみましょう。',
-    '盤面の遠野ハンナを動かして、エマに王手をかけなさい。',
+    '盤面の遠野ハンナを動かして、桜羽エマに王手をかけなさい。',
    ],
    pageGuides:[[],[],hannaGuide('b3')],playerMoveAt:2,
    correct:[{piece:'hanna',side:'sente',from:'b3',to:'c4',category:'move'}],
