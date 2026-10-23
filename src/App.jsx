@@ -460,7 +460,8 @@ export default function App(){
     if(!scenePlayerMatches(scene,record)){
      const branch=scriptedFailureBranch(scene,record);
       if(branch?.response){setLearningResponsePending({...branch,sceneFailure:true});return;}
-     const hanna5DropGuide=level.id==='hanna-5'&&sceneIndex===2&&record.piece==='hanna'&&record.category==='drop'&&!['c3','e3'].includes(record.to);
+     const dropGuide=scene.failureDropGuide;
+     const hanna5DropGuide=Boolean(dropGuide&&record.piece===dropGuide.piece&&record.category==='drop'&&!dropGuide.exclude?.includes(record.to));
      const failurePageGuides=hanna5DropGuide?[[{side:'sente',type:'hanna',square:record.to}]]:branch?.pageGuides??[];
      setLearningOutcome({kind:"failure",lines:scriptedFailureLines(level,scene,record),pageGuides:failurePageGuides});
      setLearningDialogue(0);
@@ -566,7 +567,12 @@ export default function App(){
   const generation=learningGeneration.current;
   const timer=setTimeout(()=>{
    if(generation!==learningGeneration.current)return;
-   const before={...state,turn:"gote"},action=learningResponseAction(LEARNING_LEVELS[learningLevelIndex],before,scene.autoMove);
+   const autoSide=scene.autoMoveSide??"gote";
+    const before={...state,turn:autoSide};
+    const action=learningActions(LEARNING_LEVELS[learningLevelIndex],before).find(a=>{
+     const record=learningMoveRecord(a,before);
+     return Object.entries(scene.autoMove).every(([key,value])=>record[key]===value);
+    });
    if(!action){setLearningOutcome({kind:"failure",lines:["後手の着手が合法ではないわ。盤面を確認してちょうだい。"]});setLearningDialogue(0);clearScene();return}
    beginMotion(action,before);setTimeline(t=>[...t,applyLegalAction(before,action)]);
    sceneTimers.current.push(setTimeout(()=>{
@@ -774,7 +780,8 @@ export default function App(){
   request.current++;worker.current?.postMessage({type:"reset"});
   clearTimeout(guideTimer.current);guideTriggered.current=false;
   motionSequence.current++;
-  setTimeline([learningStartState(LEARNING_LEVELS[levelIndex])]);
+  setHumanSide(LEARNING_LEVELS[levelIndex].humanSide??"sente");
+   setTimeline([learningStartState(LEARNING_LEVELS[levelIndex])]);
   setSelected(null);setHandType(null);setPieceGuide(null);setThinking(false);
   setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);
   setMotionFx(null);motionFxRef.current=null;
