@@ -134,7 +134,7 @@ export default {
   },
  ],
  successLines:[
-  '正解よ。桜羽エマの目の前に遠野ハンナを打てば、エマの逃げ道を先回りして塞げるわ。',
+  '正解よ。桜羽エマの目の前に遠野ハンナを打てば、桜羽エマの逃げ道を先回りして塞げるわ。',
   'これはよく出てくる手筋だから、覚えておきなさい。',
  ],
  successPageGuides:[hannaGuide('d3'),hannaGuide('d3'),hannaGuide('d3')],
