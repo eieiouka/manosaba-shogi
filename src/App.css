@@ -405,3 +405,7 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
   .piece-guide__heading button { width:8vw; height:8vw; }
   .piece-guide p { margin:1.2vw 0; font-size:3.1vw; }
 }
+
+.difficulty-cancel {
+  margin-top: 16px;
+}
