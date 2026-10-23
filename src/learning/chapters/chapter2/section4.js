@@ -33,7 +33,7 @@ export default {
  scenes:[
   {
    lines:[
-    '遠野ハンナを持ち駒にしたら、私（可愛いナノちゃん）を狙うのが手筋よ。',
+    '遠野ハンナを持ち駒にしたら、相手の可愛いナノちゃん（私）を狙うのが手筋よ。',
     'どこに遠野ハンナを打つのが良いか、考えてみなさい。',
    ],
    pageGuides:[[],[guide('nanoka','e5','gote')]],playerMoveAt:1,
@@ -69,5 +69,6 @@ export default {
   '遠野ハンナは、私（ナノカ）の死角である斜めを狙えるから',
   '持ち駒にしたら、相手のナノちゃんを狙うのが鉄板よ。',
  ],
+ successPageGuides:[[],guide('hanna','f5'),guide('hanna','f5'),guide('hanna','f5')],
  defaultFailureLines:['指定された手を指してちょうだい。'],
 };
