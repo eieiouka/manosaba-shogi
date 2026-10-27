@@ -139,6 +139,10 @@ export default function App(){
  const STORAGE_KEY='manosaba-v80-return-snapshot';
  const [pieceGuide,setPieceGuide]=useState(null);
  const [showHowTo,setShowHowTo]=useState(false);
+ const [showOnlineClosed,setShowOnlineClosed]=useState(false);
+  const [jstHour,setJstHour]=useState(()=>Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tokyo',hour:'numeric',hourCycle:'h23'}).format(new Date())));
+  useEffect(()=>{const update=()=>setJstHour(Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Tokyo',hour:'numeric',hourCycle:'h23'}).format(new Date())));const timer=setInterval(update,15000);return()=>clearInterval(timer)},[]);
+  const onlineEventOpen=jstHour===21;
  const [mobileLayout,setMobileLayout]=useState(()=>typeof window!=="undefined"&&window.matchMedia(MOBILE_LAYOUT_QUERY).matches);
  const worker=useRef(null),request=useRef(0),motionFxRef=useRef(null),motionSequence=useRef(0),backgroundMusic=useRef(null);
  const guideTimer=useRef(null),guideTriggered=useRef(false);
@@ -1039,10 +1043,11 @@ export default function App(){
   <div className="title-screen__shade" aria-hidden="true"/>
  <h2 className="title-screen__logo"><span style={{display:"block",fontSize:"50%",lineHeight:1.5}}>【非公式作品】<br />計画性のないナノカちゃん作</span>魔法少女ノ魔法将棋</h2>
  <div className="title-screen__actions">
-   <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>CPU戦</button><button className="title-screen__start title-screen__learning" onClick={startLearning}>対戦のコツ</button></div>
-   <button className="title-screen__start" onClick={()=>online.queue()} disabled={online.status==="connecting"||online.status==="queued"}>オンライン対戦{online.waitingCount>0?`（${online.waitingCount}人待機）`:online.operatorAccepting&&online.waitingCount===0?"（運営 対戦可）":""}</button>
+   <div className="title-screen__duo"><button className="title-screen__start" onClick={()=>setDifficultyPrompt("start")}>CPU戦</button><button className="title-screen__start title-screen__learning" onClick={startLearning}>学習モード</button></div>
+   <button className={`title-screen__start title-screen__online ${onlineEventOpen?"":"title-screen__online--closed"}`} onClick={()=>{const hour=Number(new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Tokyo",hour:"numeric",hourCycle:"h23"}).format(new Date()));if(hour===21)online.queue();else setShowOnlineClosed(true)}} disabled={online.status==="connecting"||online.status==="queued"}><span>オンライン対戦</span><span className="title-screen__online-sub">{onlineEventOpen?(online.waitingCount>0?`開催中（${online.waitingCount}人待機）`:"開催中！"):"（21:00～22:00開催）"}</span></button>
    <a className="title-screen__shop" href="https://nanochan-portal.vercel.app/" target="_blank" rel="noreferrer">Portalに戻る</a>
   </div>
+  {showOnlineClosed&&<div className="online-closed-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)setShowOnlineClosed(false)}}><section className="online-closed-dialog" role="dialog" aria-modal="true" aria-label="オンライン対戦の開催時間"><p>21:00まで待ってちょうだい。<br/>あなたは、「待て」もできないバカ犬なのかしら。<br/>まるで桜羽エマね。</p><button type="button" onClick={()=>setShowOnlineClosed(false)}>閉じる</button></section></div>}
   <OnlineLobby online={online} background={Boolean(difficultyPrompt||backgroundQueueMode)} onCpu={()=>startNewMatch(5,true)}/>
   {difficultyPrompt&&<DifficultyDialog onChoose={chooseCpuDifficulty} onCancel={()=>{setDifficultyPrompt(null);if(!alreadyWaiting)setBackgroundQueueMode(null)}}/>}
  </main>;

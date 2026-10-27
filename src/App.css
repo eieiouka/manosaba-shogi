@@ -409,3 +409,20 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .difficulty-cancel {
   margin-top: 16px;
 }
+/* Title screen: grow the two-line online button upward, preserving its bottom edge. */
+.title-screen { --online-extra-height: 2.5vw; }
+.title-screen__actions { transform: translate(-50%, calc(-50% - var(--online-extra-height) / 2)); }
+.title-screen__online { min-height: calc(5.8vw + var(--online-extra-height)); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.18em; line-height:1.25; }
+.title-screen__online-sub { font-size:.75em; letter-spacing:.045em; white-space:nowrap; }
+.title-screen__online--closed { background:linear-gradient(135deg,#a4a4a8,#64666d 55%,#41434b); color:#f9f9fa; border-color:#b3b4b9; text-shadow:0 1px 2px #222; }
+.title-screen__logo,.title-screen__notice { margin-top:calc(-1 * var(--online-extra-height)); }
+@media (max-width:760px) and (hover:none) and (pointer:coarse) {
+ .title-screen { --online-extra-height:6vw; background-position:center calc(50% - var(--online-extra-height)); }
+ .title-screen__logo,.title-screen__notice { margin-top:0; }
+ .title-screen__online { min-height:calc(14vw + var(--online-extra-height)); }
+}
+
+.online-closed-overlay {position:fixed;inset:0;z-index:1300;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.75);backdrop-filter:blur(5px)}
+.online-closed-dialog {width:min(620px,92vw);padding:clamp(22px,4vw,38px);border:1px solid #e6bb75;border-radius:18px;background:linear-gradient(150deg,#30252a,#101015);color:#fff2db;text-align:center;box-shadow:0 20px 65px #000b;font-family:"Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif}
+.online-closed-dialog p {font-size:clamp(15px,3.3vw,22px);font-weight:800;line-height:2;letter-spacing:.03em}
+.online-closed-dialog button {margin-top:15px;padding:10px 34px;border:1px solid #edc98c;border-radius:999px;background:linear-gradient(135deg,#fff0c9,#c28c46);color:#25170c;font-weight:900;cursor:pointer}
