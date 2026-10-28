@@ -20,7 +20,7 @@ export default {
  scenes:[
   {
    lines:['今回は、遠野ハンナを端から進める攻めへの受け方を教えるわ。','相手の遠野ハンナが、空中浮遊で一気に前進してきたわ。','まずは宝生マーゴを前に出してちょうだい。'],
-   autoMove:{piece:'hanna',from:'e6',to:'e4',magic:'浮遊'},autoMoveAt:1,autoDelayMs:1000,
+   autoMove:{piece:'hanna',from:'e6',to:'e4',magic:'浮遊'},autoMoveAt:1,autoDelayMs:300,
    pageGuides:[[],guide('hanna','e4','gote'),guide('margo','f1')],playerMoveAt:2,
    correct:[{piece:'margo',from:'f1',to:'e2'}],failureLines:['宝生マーゴを左斜め前に進めてちょうだい。']
   },
@@ -36,7 +36,7 @@ export default {
   },
   {
    lines:['遠野ハンナを取ったけれど、相手の黒部ナノカに取り返されるわ。','黒部ナノカの銃撃を確認してちょうだい。','遠野ハンナを取ったら、次は黒部ナノカを狙うのが手筋よ。','取った遠野ハンナを、相手の黒部ナノカを追い詰める位置に打ってちょうだい。'],
-   autoMove:{piece:'nanoka',from:'f5',to:'f3',magic:'銃撃'},autoMoveAt:1,autoDelayMs:1000,
+   autoMove:{piece:'nanoka',from:'f5',to:'f3',magic:'銃撃'},autoMoveAt:1,autoDelayMs:300,
    pageGuides:[[],guide('nanoka','f5','gote'),guide('nanoka','f5','gote'),guide('hanna','e4')],playerMoveAt:3,
    correct:[{piece:'hanna',category:'drop',to:'e4'}],
    branches:[{when:{piece:'hanna',category:'drop',to:'f4'},response:{piece:'nanoka',from:'f5',to:'f4'},delayMs:1000,finishDelayMs:850,lines:['そこでは黒部ナノカに遠野ハンナを取られてしまうわ。もう少し中央寄りに打つのよ。']}],
