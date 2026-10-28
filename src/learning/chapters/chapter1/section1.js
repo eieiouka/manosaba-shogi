@@ -13,8 +13,9 @@ export default {
         "黒部ナノカよ。まずは、凄くて偉くて天才な私の動かし方を学ぶのよ。",
         "駒を長押しすると、移動範囲と魔法を確認できるわ。How to playボタンも確認しなさい。",
         "黄色が移動マス、赤色が魔法を使えるマスを示しているわ。",
-        "移動か魔法で相手の駒を取ることもできるわよ。",
-        "相手の駒を取ったら、盤面に打つこともできるわ。",
+        "駒の周りについている、小さい矢印も目安にしてちょうだい。",
+        "移動か魔法によって、相手の駒を取ることもできるわよ。",
+        "相手の駒を取ったら、盤面に打つことができるわ。",
         "後の章で、実際にやってみましょうね。",
         "私は最強の駒だから、序盤から前に出すのがセオリーよ。",
         "実際に操作して理解しなさい。私を二段目（前）に出して。",
@@ -25,13 +26,14 @@ export default {
         [], // 2ページ目
         [{side:"sente",type:"nanoka",square:"a1"}], // 3ページ目
         [{side:"sente",type:"nanoka",square:"a1"}], // 4ページ目
-        [], // 5ページ目
+        [{side:"sente",type:"nanoka",square:"a1"}], // 5ページ目
         [], // 6ページ目
-        [{side:"sente",type:"nanoka",square:"a1"}], // 7ページ目
+        [], // 7ページ目
         [{side:"sente",type:"nanoka",square:"a1"}], // 8ページ目
+        [{side:"sente",type:"nanoka",square:"a1"}], // 9ページ目
       ],
 
-      playerMoveAt: 7, // 8ページ目で着手解禁
+      playerMoveAt: 8, // 8ページ目で着手解禁
       correct: [
         {piece:"nanoka",fromRank:1,toRank:2,forward:true},
       ],
