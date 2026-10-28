@@ -59,6 +59,7 @@ export default {
    pageGuides:[guide('hanna','e2'),guide('nanoka','f3','gote'),guide('ema','d1')],playerMoveAt:2,
    correct:[{piece:'ema',from:'d1',to:'e2'}],
    branches:[
+    {when:{piece:'hiro',from:'c1',to:'d1',magic:'居合切り'},response:{piece:'nanoka',from:'f3',to:'d1',magic:'銃撃'},delayMs:1000,finishDelayMs:1100,lines:['テクニカルな逃げ方だけど、単純に駒損してしまうわよ。']},
     {when:{piece:'sherry',from:'e1',to:'e2'},response:{piece:'nanoka',from:'f3',to:'f2',promote:true},delayMs:1000,finishDelayMs:850,lines:['橘シェリーで防ぐと、前に隙が生まれてしまうわ。']},
     {when:{piece:'ema',from:'d1',to:'c2'},response:{piece:'margo',category:'drop',to:'e2'},delayMs:1000,finishDelayMs:800,lines:['そこに逃げると、橘シェリーが危なくなるわね。']},
     {when:{piece:'ema',from:'d1',to:'d2'},response:{piece:'margo',category:'drop',to:'e3'},delayMs:1000,finishDelayMs:800,lines:['宝生マーゴで王手を続けられると、一気に負けになるわ。']},
