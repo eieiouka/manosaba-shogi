@@ -72,6 +72,6 @@ export default {
    correct:[{piece:'ema',from:'e2',to:'f3'}],failureLines:['桜羽エマで、隣にいる黒部ナノカを取ってちょうだい。']
   }
  ],
- successLines:['正解よ。宝生マーゴの跳躍暗殺は、飛びながら駒を取るから','飛び先に空きがないと、取ることができないわ。','これがハンナ端棒銀への対策よ。覚えておきなさい。'],
+ successLines:['正解よ。宝生マーゴの跳躍暗殺は、飛びながら駒を取るから','飛び先に空きがないと、取ることができないわ。','宝生マーゴで、自陣を守る方法を覚えてきたんじゃないかしら。'],
  successPageGuides:[guide('margo','e3','gote'),guide('margo','e3','gote')],defaultFailureLines:['指定された手を指してちょうだい。']
 };
