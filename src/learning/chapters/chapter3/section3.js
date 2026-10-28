@@ -27,7 +27,7 @@ export default {
   {
    lines:['相手の遠野ハンナが端にすり込んできたわ。','これが「ハンナ端棒銀」よ。「ハンナ棒銀」とは異なるから、2節と比べてちょうだい。','どう対処するのが正しいか、考えてちょうだい。'],
    autoMove:{piece:'hanna',from:'e4',to:'f3'},autoMoveAt:0,autoDelayMs:1000,
-   pageGuides:[guide('hanna','f3','gote'),guide('margo','e2')],playerMoveAt:2,
+   pageGuides:[guide('hanna','f3','gote'),guide('hanna','f3','gote'),guide('margo','e2')],playerMoveAt:2,
    correct:[{piece:'margo',from:'e2',to:'f3'}],
    branches:[
     {when:{piece:'margo',from:'e2',to:'d3'},response:{piece:'nanoka',from:'f5',to:'d3',magic:'銃撃'},delayMs:1000,finishDelayMs:1100,lines:['その位置は、私の銃撃圏内ね。']},
@@ -35,7 +35,7 @@ export default {
    ],failureLines:['宝生マーゴを動かさないと、相手から取られて損するわよ。']
   },
   {
-   lines:['端から突っ込んでくるハンナ棒銀の場合は、素直に取るのが正解よ。','私に取られて駒損してしまうけど…','ここから相手のナノちゃん（私）を生け捕りにしましょう。','取った遠野ハンナを打って、相手のナノちゃん（私）を狙いましょう。'],
+   lines:['遠野ハンナが端から突っ込んでくる場合は、素直に取るのが正解よ。','私に取られて駒損してしまうけど…','ここから相手のナノちゃん（私）を生け捕りにしましょう。','取った遠野ハンナを打って、相手のナノちゃん（私）を狙いましょう。'],
    autoMove:{piece:'nanoka',from:'f5',to:'f3',magic:'銃撃'},autoMoveAt:1,autoDelayMs:300,
    pageGuides:[[],guide('nanoka','f5','gote'),guide('nanoka','f5','gote'),guide('nanoka','f5','gote')],playerMoveAt:3,
    correct:[{piece:'hanna',category:'drop',to:'e4'}],
