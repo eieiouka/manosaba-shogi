@@ -25,9 +25,9 @@ export default {
    correct:[{piece:'margo',from:'f1',to:'e2'}],failureLines:['普遍的に言えることだけど、駒を端に動かすと使いづらいわよ。']
   },
   {
-   lines:['相手の遠野ハンナが端にすり込んできたわ。','どう対処するのが正しいか、考えてちょうだい。'],
+   lines:['相手の遠野ハンナが端にすり込んできたわ。','これが「ハンナ端棒銀」よ。「ハンナ棒銀」とは異なるから、2節と比べてちょうだい。','どう対処するのが正しいか、考えてちょうだい。'],
    autoMove:{piece:'hanna',from:'e4',to:'f3'},autoMoveAt:0,autoDelayMs:1000,
-   pageGuides:[guide('hanna','f3','gote'),guide('margo','e2')],playerMoveAt:1,
+   pageGuides:[guide('hanna','f3','gote'),guide('margo','e2')],playerMoveAt:2,
    correct:[{piece:'margo',from:'e2',to:'f3'}],
    branches:[
     {when:{piece:'margo',from:'e2',to:'d3'},response:{piece:'nanoka',from:'f5',to:'d3',magic:'銃撃'},delayMs:1000,finishDelayMs:1100,lines:['その位置は、私の銃撃圏内ね。']},
