@@ -442,3 +442,15 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .result-overlay__actions{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important;width:min(240px,70vw)!important}
 .result-overlay__actions .result-overlay__again,.result-overlay__actions .result-overlay__friend,.result-overlay__actions .result-overlay__review{display:block;width:100%!important;min-width:0!important;min-height:0!important;padding:10px 14px!important;font-size:clamp(15px,3.5vw,20px)!important;line-height:1.35!important;letter-spacing:.03em!important}
 
+
+/* Flat, wide end-of-game buttons (not pill-shaped) */
+.result-overlay__actions{width:min(290px,76vw)!important;gap:9px!important}
+.result-overlay__actions .result-overlay__again,.result-overlay__actions .result-overlay__friend,.result-overlay__actions .result-overlay__review{border-radius:10px!important;width:100%!important;min-width:0!important;padding:11px 18px!important;box-sizing:border-box!important;aspect-ratio:auto!important;line-height:1.3!important}
+/* Review navigation: arrows illuminate only when the whole analysis is ready */
+.manosaba-review-heading{display:flex;align-items:center;justify-content:center;gap:12px;min-height:48px}
+.manosaba-review-heading span{min-width:0}
+.review-nav-arrow{border:1px solid #6b625a;border-radius:8px;background:#2d2925;color:#80776d;font-size:23px;font-weight:900;min-width:48px;min-height:42px;cursor:not-allowed;transition:box-shadow .2s,background .2s,color .2s}
+.review-nav-arrow--ready{color:#fff4db;border-color:#ffcf65;background:#75471f;box-shadow:0 0 12px rgba(255,190,64,.85),inset 0 0 7px rgba(255,220,115,.35);cursor:pointer;animation:review-arrow-glow 1.7s ease-in-out infinite alternate}
+@keyframes review-arrow-glow{from{box-shadow:0 0 8px rgba(255,190,64,.5)}to{box-shadow:0 0 18px rgba(255,190,64,1)}}
+.manosaba-review-buttons button:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:760px){.manosaba-review-heading{gap:6px;font-size:13px}.review-nav-arrow{min-width:38px;min-height:38px;font-size:19px}}
