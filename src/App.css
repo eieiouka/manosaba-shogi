@@ -431,11 +431,11 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .square--capture-target::after { content:""; position:absolute; inset:5px; border-radius:7px; pointer-events:none; border:3px solid #2799ef; box-shadow:inset 0 0 10px rgba(39,153,239,.35); }
 .square--guide-capture { box-shadow:inset 0 0 0 5px rgba(39,153,239,.96),inset 0 0 24px rgba(39,153,239,.55); z-index:4; }
 
-/* Original result-button typography, padding and pill shape; one intrinsic shared column. */
-.result-overlay__panel{align-content:center;grid-template-rows:max-content max-content;justify-items:center}
-.result-overlay__actions{display:grid;grid-template-columns:max-content;grid-auto-rows:max-content;justify-items:stretch;align-items:center;width:max-content;max-width:100%;gap:clamp(8px,1.5vw,16px)}
-.result-overlay__actions>.result-overlay__again,.result-overlay__actions>.result-overlay__friend{display:block;box-sizing:border-box;width:100%;height:auto;min-height:0;max-width:none;aspect-ratio:auto;margin:0;white-space:nowrap}
-@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay__actions{display:grid;grid-template-columns:minmax(0,1fr);width:min(70vw,260px);gap:3vw}.result-overlay__actions>.result-overlay__again,.result-overlay__actions>.result-overlay__friend{width:100%;height:auto;min-width:0}}
+/* Result actions: always one column; scale with the board instead of the viewport. */
+.result-overlay .result-overlay__panel{align-content:center;grid-template-rows:max-content max-content;justify-items:center}
+.result-overlay .result-overlay__panel .result-overlay__actions{display:grid!important;grid-template-columns:minmax(0,1fr)!important;grid-auto-flow:row!important;grid-auto-rows:max-content;justify-items:stretch;align-items:center;width:clamp(150px,calc(var(--board-size) * .36),260px);max-width:90%;gap:clamp(8px,1.5vw,16px)}
+.result-overlay .result-overlay__actions>.result-overlay__again,.result-overlay .result-overlay__actions>.result-overlay__friend{display:block;box-sizing:border-box;width:100%;height:auto;min-height:0;min-width:0;max-width:100%;aspect-ratio:auto;margin:0;white-space:nowrap}
+@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay .result-overlay__panel .result-overlay__actions{width:clamp(150px,calc(var(--board-size) * .65),260px);gap:3vw}}
 .result-overlay__review{background:linear-gradient(135deg,#f4c5c4 0%,#cf8c93 52%,#b76d7e 100%);color:#241315;border-color:#e9b6b7}
 .result-overlay::before{inset:16% 4%}
 .result-overlay__panel{gap:clamp(12px,2vw,22px)}
