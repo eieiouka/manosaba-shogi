@@ -74,7 +74,7 @@ function Hand({className,title,pieces,activeType,onPick,disabled,perspective,rev
  const groups=order.map(type=>({type,items:pieces.filter(piece=>piece.type===type)})).filter(group=>group.items.length);
  return <aside className={`hand ${className}`}>
   <div className="hand-title">{title}</div>
-  <div className={`hand-pieces ${groups.length?"":"hand-pieces--empty"}`}>{groups.length?groups.map(({type,items})=><div className={`hand-group ${items.length>1?"hand-group--double":""}`} key={type}>{items.map((piece,i)=><button aria-disabled={disabled} key={`${piece.id}-${i}`} className={`hand-piece ${activeType===type?"active":""}`} onClick={()=>{if(!disabled)onPick(type)}} onPointerDown={()=>onGuideStart?.(piece,null,null)} onPointerUp={onGuideEnd} onPointerCancel={onGuideEnd} onPointerLeave={onGuideEnd} onContextMenu={event=>event.preventDefault()} aria-label={`${PIECES[type].name}を選ぶ`}><Piece piece={piece} compact perspective={perspective}/></button>)}</div>):<span className="hand-empty">なし</span>}</div>
+  <div className={`hand-pieces ${groups.length?"":"hand-pieces--empty"}`}>{groups.length?groups.map(({type,items})=><div className={`hand-group ${items.length>1?"hand-group--double":""}`} key={type}>{items.map((piece,i)=><button aria-disabled={disabled} key={`${piece.id}-${i}`} data-review-hand-type={type} className={`hand-piece ${activeType===type?"active":""}`} onClick={()=>{if(!disabled)onPick(type)}} onPointerDown={()=>onGuideStart?.(piece,null,null)} onPointerUp={onGuideEnd} onPointerCancel={onGuideEnd} onPointerLeave={onGuideEnd} onContextMenu={event=>event.preventDefault()} aria-label={`${PIECES[type].name}を選ぶ`}><Piece piece={piece} compact perspective={perspective}/></button>)}</div>):<span className="hand-empty">なし</span>}</div>
  </aside>;
 }
 
@@ -114,6 +114,7 @@ function HowToPlayDialog({onClose}){
 export default function App(){
  const initial=useMemo(()=>makeInitialState(),[]);
  const [started,setStarted]=useState(false);
+ const [reviewMode,setReviewMode]=useState(false),[reviewIndex,setReviewIndex]=useState(0),[reviewMarks,setReviewMarks]=useState({}),[reviewBusy,setReviewBusy]=useState(false),[reviewScores,setReviewScores]=useState({});
   const [cpuStarts,setCpuStarts]=useState(0);
   const [learningStarts,setLearningStarts]=useState(0);
 
@@ -154,6 +155,71 @@ export default function App(){
  const clearScene=()=>{sceneTimers.current.forEach(clearTimeout);sceneTimers.current=[];sceneBusy.current=false;learningAutoMovingRef.current=false;setLearningAutoMoving(false);};
  const learningAutoMovingRef=useRef(false);
  const state=timeline[timeline.length-1];
+ const reviewStageRef=useRef(null);
+ const [reviewDropArrow,setReviewDropArrow]=useState(null);
+ useEffect(()=>{
+  const action=reviewMode?reviewMarks[reviewIndex]:null;
+  if(!action||action.category!=="drop"||!action.to){setReviewDropArrow(null);return}
+  const stage=reviewStageRef.current;
+  if(!stage)return;
+  const update=()=>{
+   const type=action.piece?.type;
+   const source=Array.from(stage.querySelectorAll(".hand--player [data-review-hand-type]")).find(el=>el.getAttribute("data-review-hand-type")===type);
+   const target=stage.querySelector(`[data-review-square="${action.to[0]},${action.to[1]}"]`);
+   if(!source||!target){setReviewDropArrow(null);return}
+   const parent=stage.getBoundingClientRect(),a=source.getBoundingClientRect(),b=target.getBoundingClientRect();
+   setReviewDropArrow({x1:a.left+a.width/2-parent.left,y1:a.top+a.height/2-parent.top,x2:b.left+b.width/2-parent.left,y2:b.top+b.height/2-parent.top,width:parent.width,height:parent.height});
+  };
+  update();
+  window.addEventListener("resize",update);
+  return()=>window.removeEventListener("resize",update);
+ },[reviewMode,reviewIndex,reviewMarks,mobileLayout]);
+ const displayState=reviewMode?timeline[Math.min(reviewIndex,timeline.length-1)]:state;
+ useEffect(()=>{
+  if(!reviewMode||mode!=="ai")return;
+  let stopped=false,startedAt=performance.now();
+  const aw=new Worker(new URL("./game/ai.worker.js",import.meta.url),{type:"module"});
+  let cursor=0;
+  const scores=[],actions=[];
+  setReviewMarks({});setReviewScores({});setReviewBusy(true);
+  aw.onmessage=({data})=>{
+   if(stopped||data?.type!=="review-result")return;
+   if(data.result){scores[cursor]=data.result.score;actions[cursor]=data.result.action;}
+   setReviewScores(old=>({...old,[cursor]:{score:data.result?.score,depth:data.result?.depth}}));
+   cursor++;
+   if(cursor>=timeline.length){
+    const marks={};
+    for(let i=0;i<timeline.length-1;i++){
+     if(timeline[i].turn!==humanSide||!Number.isFinite(scores[i])||!Number.isFinite(scores[i+1]))continue;
+     // Compare the best available score before the player's move with the
+     // opponent's best reply score after the move, in the same player's perspective.
+     const drop=(humanSide==="sente"?1:-1)*(scores[i]-scores[i+1]);
+     const best=actions[i],actual=timeline[i+1]?.lastMove;
+     const sameMove=best&&actual&&best.category===actual.category&&
+       JSON.stringify(best.to)===JSON.stringify(actual.to)&&
+       JSON.stringify(best.from??null)===JSON.stringify(actual.from??null)&&
+       (best.category!=="drop"||best.piece?.type===timeline[i+1].board[best.to[0]][best.to[1]]?.type);
+     if(drop>=150&&best&&!sameMove)marks[i]=best;
+    }
+    setReviewMarks(marks);setReviewBusy(false);
+    console.info("AI review finished in",Math.round(performance.now()-startedAt),"ms");
+    return;
+   }
+   next();
+  };
+  function next(){
+   if(stopped)return;
+   aw.postMessage({type:"review",id:cursor,state:timeline[cursor],playedState:timeline[cursor+1]??null,seen:timeline.slice(0,cursor+1).map(stateKey)});
+  }
+  next();
+  return()=>{stopped=true;aw.terminate()};
+ },[reviewMode]);
+ function jumpReview(delta,bad=false){
+  if(!bad){setReviewIndex(i=>Math.max(0,Math.min(timeline.length-1,i+delta)));return}
+  const keys=Object.keys(reviewMarks).map(Number).sort((a,b)=>a-b);
+  const dest=delta<0?keys.filter(k=>k<reviewIndex).pop():keys.find(k=>k>reviewIndex);
+  if(dest!==undefined)setReviewIndex(dest);
+ }
  const online=useOnline(data=>{
    if(started&&(mode==='ai'||mode==='learning')&&(backgroundQueueMode===mode||(mode==='ai'&&backgroundQueueMode==='cpu'))){
     const snapshot={mode,timeline,humanSide,difficultyDepth,learningLevelIndex,learningDialogue,learningHistory,learningOutcome,sceneIndex,sceneAutoDone,sceneSnapshots:sceneSnapshots.current,scenePlayerSnapshots:scenePlayerSnapshots.current};
@@ -175,7 +241,7 @@ export default function App(){
  const onlineBlocked=mode==="online"&&(!online.match||online.match.paused||online.now<online.match.readyAt||!online.connected);
  const checkedSide=!result&&isEmmaInCheck(state,state.turn)?state.turn:null;
  const gameOver=Boolean(result||resigned);
- useCpuPresence(started&&mode==="ai"&&!gameOver);
+ useCpuPresence(started&&mode==="ai"&&!gameOver&&!reviewMode);
  useLearningPresence(started&&mode==="learning");
  useAdminActivity(started&&!gameOver);
   // Each mode counts starts, while presence continues every minute (also across hour boundaries).
@@ -393,7 +459,7 @@ export default function App(){
   return()=>clearTimeout(timer);
  },[result,finishFxDone,humanSide]);
  useEffect(()=>{
-  if(mode==="online"||mode==="learning"||!started||gameOver||!worker.current)return;
+  if(mode==="online"||mode==="learning"||reviewMode||!started||gameOver||!worker.current)return;
   if(state.turn===humanSide){worker.current.postMessage({type:"ponder",state,seen,openingActive:openingActive&&cpuOwnMoves<5,cpuOwnMoves,minDepth:difficultyDepth,...((waitingCpu||difficultyDepth===1||difficultyDepth===5)?{maxDepth:waitingCpu?5:difficultyDepth}:{})});return}
   setThinking(true);
   const id=++request.current;
@@ -702,6 +768,7 @@ export default function App(){
   setLearningDialogue(n=>Math.min(learningLines.length-1,n+1));
  }
  function play(action){
+  if(reviewMode)return;
   if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver||learningBoardLocked)return;
   if(mode==="online")online.move(action);else commitAction(action,state);
   setSelected(null);setHandType(null);
@@ -718,6 +785,7 @@ export default function App(){
  }
  function endPieceGuide(){clearTimeout(guideTimer.current)}
  function click(row,col){
+  if(reviewMode)return;
   if(guideTriggered.current){guideTriggered.current=false;return}
   if(pieceGuide){setPieceGuide(null);return}
   if(onlineBlocked||thinking||motionFx||state.turn!==humanSide||gameOver||learningBoardLocked)return;
@@ -768,7 +836,7 @@ export default function App(){
  async function startNewMatch(depth,cpuWhileWaiting=false){
    setCpuStarts(n=>n+1);
   setWaitingCpu(cpuWhileWaiting);
-  setMode("ai");
+  setMode("ai");setReviewMode(false);setReviewIndex(0);
   request.current++;
   worker.current?.postMessage({type:"reset"});
   motionFxRef.current=null;setDifficultyDepth(depth);setDifficultyPrompt(null);setHumanSide(randomSide());setTimeline([makeInitialState()]);setSelected(null);setHandType(null);setThinking(false);setResigned(false);setFinishFx(null);setFinishFxDone(false);setResultRevealReady(false);setMotionFx(null);setStarted(true);
@@ -985,8 +1053,8 @@ export default function App(){
   setTimeout(()=>{if(motionFxRef.current?.id===id)motionFxRef.current=null;setMotionFx(current=>current?.id===id?null:current)},duration);
  }
 
- const targets=new Map(selectable.map(a=>[`${a.to[0]},${a.to[1]}`,a]));
- const endMessage=mode==="learning"?"":resigned?"敗北…":result&&finishFxDone&&resultRevealReady?(result.winner===null?"引き分け":result.winner===humanSide?"勝利！":"敗北…"):"";
+ const targets=new Map((reviewMode?[]:selectable).map(a=>[`${a.to[0]},${a.to[1]}`,a]));
+ const endMessage=reviewMode?"":mode==="learning"?"":resigned?"敗北…":result&&finishFxDone&&resultRevealReady?(result.winner===null?"引き分け":result.winner===humanSide?"勝利！":"敗北…"):"";
  const pieceFxClass=piece=>{
   if(!piece||piece.type!=="ema"||!finishFx)return"";
   if((finishFx.phase==="try-transform"||finishFx.phase==="try-arrow")&&piece.side===finishFx.winner)return" ema--try-glow";
@@ -995,7 +1063,7 @@ export default function App(){
   if(finishFx.phase==="done"&&piece.side===finishFx.losingSide)return" ema--gone";
   return"";
  };
- const findEmmaPosition=side=>{for(let r=0;r<6;r++)for(let c=0;c<6;c++)if(state.board[r][c]?.type==="ema"&&state.board[r][c].side===side)return[r,c];return null};
+ const findEmmaPosition=side=>{for(let r=0;r<6;r++)for(let c=0;c<6;c++)if(displayState.board[r][c]?.type==="ema"&&displayState.board[r][c].side===side)return[r,c];return null};
  const arrowFrom=finishFx&&findEmmaPosition(finishFx.winner),arrowTo=finishFx&&findEmmaPosition(finishFx.losingSide);
  const showTryArrow=finishFx?.phase==="try-arrow"&&arrowFrom&&arrowTo;
  const showNanokaShot=Boolean(motionFx?.isNanokaShot&&motionFx.action.from&&motionFx.captureAt);
@@ -1020,7 +1088,7 @@ export default function App(){
  const captureOrder={sherry:0,hanna:1,hiro:2,nanoka:3,margo:4};
  const captureTargetIndex=motionFx?.captured?(motionFx.mover===humanSide?captureOrder[motionFx.captured.type]:4-captureOrder[motionFx.captured.type]):2;
  const visibleHand=side=>{
-  const pieces=state.hands[side];
+  const pieces=displayState.hands[side];
   if(!motionFx?.captured||motionFx.captured.type==="ema"||motionFx.mover!==side)return pieces;
   let hidden=-1;
   for(let i=pieces.length-1;i>=0;i--)if(pieces[i].type===motionFx.captured.type){hidden=i;break}
@@ -1073,13 +1141,23 @@ export default function App(){
    <div className="online-bar__clock">{online.match?.result?"対局終了":online.match?.paused?"再接続待ち":online.now<online.match?.readyAt?"準備中…":state.turn===humanSide?`残り${online.remaining}秒`:"\u00a0"}</div>
    {online.error&&<span>{online.error}</span>}
   </div>}
-  <main className="game-stage">
+  <main className="game-stage" ref={reviewStageRef}>
    <Hand className="hand--opponent" title="相手の持ち駒" pieces={visibleHand(opponentSide)} disabled activeType={null} onPick={()=>{}} perspective={humanSide} reverse onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
-   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=state.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?(target.piece?.type==="sherry"&&target.magic==="サイドステップ"?"square--capture-target":(target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${activeGuide?.row===r&&activeGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div><div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>{if(mode==="online"){setStarted(false);setSelected(null);setHandType(null);online.queue();}else setDifficultyPrompt("rematch")}}>再対局</button><button className="result-overlay__friend" onClick={()=>{if(mode==="online"&&savedReturnMode){restorePreviousMode();return;}if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
-   <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
-   {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
+   <div className="board-stack"><div className="board-frame"><div className="board-container"><div className="board">{visualCells.map(({row:r,column:c})=>{const key=`${r},${c}`,piece=displayState.board[r][c],target=targets.get(key),guideTarget=guideTargets.get(key),pendingCaptured=motionFx?.isNanokaShot&&!motionFx.impactReached&&motionFx.captureAt?.[0]===r&&motionFx.captureAt?.[1]===c?{...motionFx.captured,side:motionFx.capturedOriginalSide}:null,shownPiece=piece??pendingCaptured,fxClass=pieceFxClass(shownPiece),moveClass=motionClass(shownPiece,r,c),checkClass=shownPiece?.type==="ema"&&shownPiece.side===checkedSide?" ema--in-check":"",tryWinner=Boolean(shownPiece?.type==="ema"&&result?.reason==="ema-safe-try"&&shownPiece.side===result.winner),moveStyle=motionStyle(r,c,moveClass),promotedOverride=tryWinner?finishFx?.promotionRevealed===true:moveClass&&motionFx?.action.promote?Boolean(motionFx.promotionRevealed):undefined;return <button key={key} data-review-square={key} onClick={()=>click(r,c)} onPointerDown={()=>beginPieceGuide(piece,r,c)} onPointerUp={endPieceGuide} onPointerCancel={endPieceGuide} onPointerLeave={endPieceGuide} onContextMenu={event=>event.preventDefault()} className={`square ${(r+c)%2?"square--alt":""} ${selected?.[0]===r&&selected?.[1]===c?"square--selected":""} ${target?(target.piece?.type==="sherry"&&target.magic==="サイドステップ"?"square--capture-target":(target.category==="magic"||target.longForward)?"square--magic-target":"square--move-target"):""} ${activeGuide?.row===r&&activeGuide?.col===c?"square--guide-source":""} ${guideTarget?`square--guide-${guideTarget}`:""} ${(fxClass||moveClass)?"square--finish-fx":""}`}>{shownPiece&&<div style={moveStyle} className={`finish-piece${fxClass}${moveClass}${checkClass}${moveClass&&motionFx?.action.promote?" motion-promote":""}`}><Piece piece={shownPiece} perspective={humanSide} promotedOverride={promotedOverride}/></div>}</button>})}</div>{motionFx?.captured&&captureVisual&&(!motionFx.isNanokaShot||motionFx.impactReached)&&<div className={`capture-fly capture-fly--${motionFx.mover}`} style={{left:`${captureVisual[1]*100/6}%`,top:`${captureVisual[0]*100/6}%`,...captureDestination,"--capture-delay":`${motionFx.impactDelay||0}ms`}}><Piece piece={{...motionFx.captured,side:motionFx.capturedOriginalSide,promoted:false}} perspective={humanSide}/></div>}{showNanokaShot&&<svg className="nanoka-shot" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="nanoka-shot-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(shotFrom[1]+.5)*100} y1={(shotFrom[0]+.5)*100} x2={(shotTo[1]+.5)*100} y2={(shotTo[0]+.5)*100} pathLength="1"/><circle cx={(shotTo[1]+.5)*100} cy={(shotTo[0]+.5)*100} r="15"/></svg>}{reviewMode&&reviewMarks[reviewIndex]&&reviewMarks[reviewIndex].category!=="drop"&&(()=>{const a=reviewMarks[reviewIndex];if(!a.from||!a.to)return null;const p=toVisual(a.from),q=toVisual(a.to);return <svg className="review-best-arrow" viewBox="0 0 600 600" aria-label="推奨手"><defs><marker id="review-arrow-head" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#e53535"/></marker></defs><line x1={(p[1]+.5)*100} y1={(p[0]+.5)*100} x2={(q[1]+.5)*100} y2={(q[0]+.5)*100} stroke="#e53535" strokeWidth="8" markerEnd="url(#review-arrow-head)"/></svg>})()}{showTryArrow&&<svg className="try-arrow" viewBox="0 0 600 600" aria-hidden="true"><defs><filter id="arrow-glow"><feGaussianBlur stdDeviation="7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><line x1={(tryFrom[1]+.5)*100} y1={(tryFrom[0]+.5)*100} x2={(tryTo[1]+.5)*100} y2={(tryTo[0]+.5)*100} pathLength="1"/></svg>}{endMessage&&<div className={`result-overlay ${endMessage.startsWith("勝利")?"result-overlay--win":"result-overlay--lose"}`} role="status"><div className="result-overlay__panel"><div className="result-overlay__text">{endMessage}</div><div className="result-overlay__actions"><button className="result-overlay__again" onClick={()=>{if(mode==="online"){setStarted(false);setSelected(null);setHandType(null);online.queue();}else setDifficultyPrompt("rematch")}}>再挑戦</button>{mode==="ai"&&<button className="result-overlay__friend result-overlay__review" onClick={()=>{setReviewIndex(0);setReviewMode(true);setSelected(null);setHandType(null);setPieceGuide(null);setFinishFx(null)}}>AI解析</button>}<button className="result-overlay__friend" onClick={()=>{if(mode==="online"&&savedReturnMode){restorePreviousMode();return;}if(mode==="online")online.leaveMatch();else if(backgroundQueueMode)online.cancel();setBackgroundQueueMode(null);setSavedReturnMode(null);returnSnapshotRef.current=null;try{localStorage.removeItem(STORAGE_KEY)}catch{}setStarted(false)}}>戻る</button></div></div></div>}</div></div><p className="board-note">桜羽エマを取られたら負けです。桜羽エマが成ると特殊勝利できます。<br/>エマだけは敵陣最下段、他の駒は敵陣二段目に移動すると魔女化します。<br/>取った駒は打てますが、敵陣最下段には打てません。<br/>長押しで駒の能力を見れます。</p></div>
+   <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={reviewMode||onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
+   {reviewMode&&reviewDropArrow&&<svg className="review-hand-arrow" viewBox={`0 0 ${reviewDropArrow.width} ${reviewDropArrow.height}`} aria-label="持ち駒から打つマスへの推奨手"><defs><marker id="review-hand-arrowhead" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#e53535"/></marker></defs><line x1={reviewDropArrow.x1} y1={reviewDropArrow.y1} x2={reviewDropArrow.x2} y2={reviewDropArrow.y2} stroke="#e53535" strokeWidth="7" markerEnd="url(#review-hand-arrowhead)"/></svg>}
+   {mode!=="learning"&&!reviewMode&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
-  {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
+  {reviewMode&&<div className="manosaba-review-controls">
+    <div className="manosaba-review-buttons">
+      <button className={!reviewBusy&&Object.keys(reviewMarks).some(k=>Number(k)<reviewIndex)?"review-button--ready":""} disabled={reviewBusy||!Object.keys(reviewMarks).some(k=>Number(k)<reviewIndex)} onClick={()=>jumpReview(-1,true)}>前の悪手 ◀</button>
+      <button className={!reviewBusy&&reviewIndex>0?"review-button--ready":""} disabled={reviewBusy||reviewIndex===0} onClick={()=>jumpReview(-1)}>前の手 ◀</button>
+      <button className={!reviewBusy&&reviewIndex<timeline.length-1?"review-button--ready":""} disabled={reviewBusy||reviewIndex>=timeline.length-1} onClick={()=>jumpReview(1)}>次の手 ▶</button>
+      <button className={!reviewBusy&&Object.keys(reviewMarks).some(k=>Number(k)>reviewIndex)?"review-button--ready":""} disabled={reviewBusy||!Object.keys(reviewMarks).some(k=>Number(k)>reviewIndex)} onClick={()=>jumpReview(1,true)}>次の悪手 ▶</button>
+    </div>
+    <div className="manosaba-review-footer"><span>{reviewIndex}/{timeline.length-1}手目</span><button onClick={()=>{setReviewMode(false);setReviewIndex(0)}}>解析終了</button></div>
+   </div>}
+   {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
   {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&(!learningLevel.scenes[sceneIndex]?.autoMove&&!learningLevel.scenes[sceneIndex]?.autoSequence||sceneAutoDone))||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
   {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={requestLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
   {mode==="learning"&&confirmLearningBack&&<LearningBackConfirm onConfirm={leaveLearning} onCancel={()=>setConfirmLearningBack(false)}/>}

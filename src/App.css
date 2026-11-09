@@ -67,7 +67,7 @@ button { font: inherit; }
 .title-screen__start:hover,.title-screen__shop:hover { transform: translateY(-2px); filter: brightness(1.1); box-shadow:0 14px 34px rgba(0,0,0,.58),0 0 20px rgba(228,187,111,.2); }
 .title-screen__start:active,.title-screen__shop:active { transform: translateY(1px); }
 
-.app-shell { min-height: 100vh; padding: 14px 20px; overflow: hidden; }
+.app-shell { min-height: 100vh; padding: 14px 20px; overflow: hidden; box-sizing: border-box; }
 .topbar {
   width: calc(var(--board-size) + var(--hand-width) + var(--hand-width) + var(--stage-gap) + var(--stage-gap));
   min-height: 68px; margin: 0 auto 8px;
@@ -430,3 +430,39 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 /* Sherry capture-only diagonals: blue in both selection and long-press guide. */
 .square--capture-target::after { content:""; position:absolute; inset:5px; border-radius:7px; pointer-events:none; border:3px solid #2799ef; box-shadow:inset 0 0 10px rgba(39,153,239,.35); }
 .square--guide-capture { box-shadow:inset 0 0 0 5px rgba(39,153,239,.96),inset 0 0 24px rgba(39,153,239,.55); z-index:4; }
+
+/* CPU result: two buttons on top, Back centered below. Responsive to board size. */
+.result-overlay .result-overlay__panel{align-content:center;grid-template-rows:max-content max-content;justify-items:center}
+.result-overlay .result-overlay__panel .result-overlay__actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-auto-flow:row!important;grid-auto-rows:max-content;align-items:center;justify-items:stretch;width:min(96vw,calc(var(--board-size) * .69));gap:clamp(8px,1.5vw,16px)}
+.result-overlay .result-overlay__actions>.result-overlay__again,.result-overlay .result-overlay__actions>.result-overlay__friend{display:block;box-sizing:border-box;width:100%;height:auto;min-height:0;min-width:0;max-width:100%;aspect-ratio:auto;margin:0;white-space:nowrap}
+.result-overlay .result-overlay__actions>.result-overlay__friend:not(.result-overlay__review){grid-column:1 / -1;justify-self:stretch;width:100%}
+@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay .result-overlay__panel .result-overlay__actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;width:min(96vw,calc(var(--board-size) * .7452));gap:clamp(6px,2vw,12px)}.result-overlay .result-overlay__actions>.result-overlay__friend:not(.result-overlay__review){width:100%}}
+.result-overlay__review{background:linear-gradient(135deg,#f4c5c4 0%,#cf8c93 52%,#b76d7e 100%);color:#241315;border-color:#e9b6b7}
+.result-overlay::before{inset:16% 4%}
+.result-overlay__panel{gap:clamp(12px,2vw,22px)}
+@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay::before{inset:15% 3%}}
+/* Review board navigation */
+.manosaba-review-controls{max-width:720px;margin:8px auto 16px;padding:0 10px;text-align:center;color:#fff0db}
+.manosaba-review-buttons{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin:0}
+.manosaba-review-buttons button{flex:0 0 auto;width:auto;min-width:95px;min-height:36px;padding:7px 11px;border:1px solid #b99565;border-radius:7px;background:#34231d;color:#fff0db;font-size:14px;line-height:1.2;white-space:nowrap;cursor:pointer}
+.manosaba-review-buttons .review-button--ready{border-color:#f5c675;background:#62401f;color:#fff0cc;box-shadow:0 0 10px rgba(255,194,78,.6);animation:review-arrow-glow 1.7s ease-in-out infinite alternate}
+@keyframes review-arrow-glow{from{box-shadow:0 0 8px rgba(255,190,64,.5)}to{box-shadow:0 0 18px rgba(255,190,64,1)}}
+.manosaba-review-buttons button:disabled{opacity:.4;cursor:not-allowed}
+.manosaba-review-footer{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:9px;font-size:12px;color:#d8c4a4;font-weight:500}
+.manosaba-review-footer button{padding:5px 12px;border:1px solid #9e8056;border-radius:6px;background:#30251e;color:#fff0d5;font-size:12px;cursor:pointer}
+.review-best-arrow{position:absolute;inset:0;z-index:65;width:100%;height:100%;pointer-events:none}
+@media(max-width:760px){.manosaba-review-buttons{gap:5px}.manosaba-review-buttons button{min-width:0;padding:7px 8px;font-size:12px}}
+
+/* Review hand-drop arrow spans the actual hand and board, without a text label. */
+.game-stage{position:relative}
+.review-hand-arrow{position:absolute;inset:0;width:100%;height:100%;z-index:80;pointer-events:none;overflow:visible}
+
+/* Remove only the trailing blank space below mobile AI review controls. */
+@media (max-width:760px) and (hover:none) and (pointer:coarse){
+  .app-shell:has(> .manosaba-review-controls){padding-bottom:0}
+  .app-shell > .manosaba-review-controls{margin-bottom:0}
+}
+
+/* Restore the previously approved softly rounded button shape. */
+.result-overlay .result-overlay__actions>.result-overlay__again,
+.result-overlay .result-overlay__actions>.result-overlay__friend{border-radius:18px}

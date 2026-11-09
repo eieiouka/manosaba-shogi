@@ -1,0 +1,10 @@
+<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>魔法将棋 Fairy-Stockfish 棋譜解析</title>
+<style>body{font:15px system-ui;margin:24px auto;max-width:1100px;padding:0 16px;background:#fafafa;color:#222}button,input{font:inherit;padding:7px}button{cursor:pointer}canvas{width:100%;background:white;border:1px solid #ddd}table{border-collapse:collapse;width:100%;background:white}th,td{border-bottom:1px solid #ddd;padding:7px;text-align:right}td:nth-child(2),th:nth-child(2){text-align:left}#log{white-space:pre-wrap;font:12px monospace;max-height:180px;overflow:auto;background:#eee;padding:10px} .hint{color:#555}</style>
+<h1>魔法将棋・形勢推移</h1><p>2026/11/08 魔の鯖（先手） vs 計画性のないナノカ（後手）</p>
+<label>探索深度 <input id="depth" type="number" min="1" max="31" value="19" style="width:65px"></label>
+<label>最低深度 <input id="minDepth" type="number" min="1" max="31" value="19" style="width:65px"></label>
+<label>各局面の最低探索時間(ms) <input id="budget" type="number" min="1" value="1000" style="width:90px"></label>
+<button id="start">解析開始</button><button id="stop" disabled>中止</button><button id="save" disabled>CSV保存</button><p id="status">待機中</p>
+<canvas id="chart" width="1000" height="430"></canvas><p class="hint">先手視点：＋は魔の鯖有利、－は計画性のないナノカ有利。mate値は±20000として表示。探索深度はエンジン報告値。</p>
+<table><thead><tr><th>手数</th><th>着手</th><th>評価値（先手視点）</th><th>深度</th><th>ノード</th><th>秒</th><th>最善候補</th></tr></thead><tbody id="rows"></tbody></table><h3>ログ</h3><pre id="log"></pre>
+<script type="module" src="/analyze-fairy.js"></script></html>
