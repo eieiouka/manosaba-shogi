@@ -441,3 +441,6 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 /* Compact vertical post-game action stack */
 .result-overlay__actions{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important;width:min(240px,70vw)!important}
 .result-overlay__actions .result-overlay__again,.result-overlay__actions .result-overlay__friend,.result-overlay__actions .result-overlay__review{display:block;width:100%!important;min-width:0!important;min-height:0!important;padding:10px 14px!important;font-size:clamp(15px,3.5vw,20px)!important;line-height:1.35!important;letter-spacing:.03em!important}
+
+/* Reuse the exact Learning button palette and constrain review button geometry */
+.result-overlay__actions .result-overlay__review.title-screen__learning{background-color:inherit;background-image:inherit}
