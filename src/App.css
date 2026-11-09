@@ -431,12 +431,12 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .square--capture-target::after { content:""; position:absolute; inset:5px; border-radius:7px; pointer-events:none; border:3px solid #2799ef; box-shadow:inset 0 0 10px rgba(39,153,239,.35); }
 .square--guide-capture { box-shadow:inset 0 0 0 5px rgba(39,153,239,.96),inset 0 0 24px rgba(39,153,239,.55); z-index:4; }
 
-/* CPU review: reuse the original result button sizing and shape. */
+/* Only layout changes for the three original-sized result buttons. */
 .result-overlay__actions{flex-direction:column}
-.result-overlay__review{min-width:clamp(150px,24vw,230px);padding:clamp(10px,1.5vw,15px) clamp(20px,3vw,34px);border:2px solid #e9b6b7;border-radius:999px;background:linear-gradient(135deg,#f4c5c4 0%,#cf8c93 52%,#b76d7e 100%);color:#241315;font-family:inherit;font-size:clamp(16.5px,4.65vw,22.5px);font-weight:900;letter-spacing:.08em;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.55),0 0 14px rgba(255,255,255,.12);cursor:pointer}
+.result-overlay__review{background:linear-gradient(135deg,#f4c5c4 0%,#cf8c93 52%,#b76d7e 100%);color:#241315;border-color:#e9b6b7}
 .result-overlay::before{inset:16% 4%}
 .result-overlay__panel{gap:clamp(12px,2vw,22px)}
-@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay__actions{display:grid;grid-template-columns:minmax(0,1fr);width:min(70vw,260px);gap:3vw}.result-overlay__review{min-width:0;width:100%;padding:2.5vw 3vw;font-size:clamp(14px,3.8vw,18px);letter-spacing:.035em;white-space:nowrap}.result-overlay::before{inset:15% 3%}}
+@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay::before{inset:15% 3%}}
 /* Review board navigation */
 .manosaba-review-controls{max-width:720px;margin:8px auto 16px;padding:0 10px;text-align:center;color:#fff0db}
 .manosaba-review-buttons{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin:0}
