@@ -435,8 +435,8 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .result-overlay .result-overlay__panel{align-content:center;grid-template-rows:max-content max-content;justify-items:center}
 .result-overlay .result-overlay__panel .result-overlay__actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-auto-flow:row!important;grid-auto-rows:max-content;align-items:center;justify-items:stretch;width:min(90%,calc(var(--board-size) * .74));gap:clamp(8px,1.5vw,16px)}
 .result-overlay .result-overlay__actions>.result-overlay__again,.result-overlay .result-overlay__actions>.result-overlay__friend{display:block;box-sizing:border-box;width:100%;height:auto;min-height:0;min-width:0;max-width:100%;aspect-ratio:auto;margin:0;white-space:nowrap}
-.result-overlay .result-overlay__actions>.result-overlay__friend:not(.result-overlay__review){grid-column:1 / -1;justify-self:center;width:calc((100% - clamp(8px,1.5vw,16px))/2)}
-@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay .result-overlay__panel .result-overlay__actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;width:min(90%,calc(var(--board-size) * .74));gap:clamp(6px,2vw,12px)}.result-overlay .result-overlay__actions>.result-overlay__friend:not(.result-overlay__review){width:calc((100% - clamp(6px,2vw,12px))/2)}}
+.result-overlay .result-overlay__actions>.result-overlay__friend:not(.result-overlay__review){grid-column:1 / -1;justify-self:stretch;width:100%}
+@media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay .result-overlay__panel .result-overlay__actions{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;width:min(90%,calc(var(--board-size) * .74));gap:clamp(6px,2vw,12px)}.result-overlay .result-overlay__actions>.result-overlay__friend:not(.result-overlay__review){width:100%}}
 .result-overlay__review{background:linear-gradient(135deg,#f4c5c4 0%,#cf8c93 52%,#b76d7e 100%);color:#241315;border-color:#e9b6b7}
 .result-overlay::before{inset:16% 4%}
 .result-overlay__panel{gap:clamp(12px,2vw,22px)}
