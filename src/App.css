@@ -454,3 +454,12 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 @keyframes review-arrow-glow{from{box-shadow:0 0 8px rgba(255,190,64,.5)}to{box-shadow:0 0 18px rgba(255,190,64,1)}}
 .manosaba-review-buttons button:disabled{opacity:.4;cursor:not-allowed}
 @media(max-width:760px){.manosaba-review-heading{gap:6px;font-size:13px}.review-nav-arrow{min-width:38px;min-height:38px;font-size:19px}}
+
+/* AI review: original compact navigation, no oversized heading or duplicate arrows */
+.manosaba-review-controls{max-width:720px;margin:8px auto 16px;padding:0 10px}
+.manosaba-review-buttons{display:flex;flex-wrap:wrap;justify-content:center;gap:7px;margin:0}
+.manosaba-review-buttons button{flex:0 0 auto;width:auto;min-width:95px;max-width:150px;min-height:36px;padding:7px 11px;border-radius:7px;font-size:14px;line-height:1.2;white-space:nowrap;box-shadow:none;transition:box-shadow .2s,border-color .2s,background .2s}
+.manosaba-review-buttons .review-button--ready{border-color:#f5c675;background:#62401f;color:#fff0cc;box-shadow:0 0 10px rgba(255,194,78,.6);animation:review-arrow-glow 1.7s ease-in-out infinite alternate}
+.manosaba-review-footer{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:9px;font-size:12px;color:#d8c4a4;font-weight:500}
+.manosaba-review-footer button{padding:5px 12px;border:1px solid #9e8056;border-radius:6px;background:#30251e;color:#fff0d5;font-size:12px;cursor:pointer}
+@media(max-width:760px){.manosaba-review-buttons{gap:5px}.manosaba-review-buttons button{min-width:0;max-width:none;padding:7px 8px;font-size:12px}}
