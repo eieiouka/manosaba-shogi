@@ -180,19 +180,26 @@ export default function App(){
   let stopped=false,startedAt=performance.now();
   const aw=new Worker(new URL("./game/ai.worker.js",import.meta.url),{type:"module"});
   let cursor=0;
-  const scores=[],actions=[],improvements=[];
+  const scores=[],actions=[];
   setReviewMarks({});setReviewScores({});setReviewBusy(true);
   aw.onmessage=({data})=>{
    if(stopped||data?.type!=="review-result")return;
-   if(data.result){scores[cursor]=data.result.score;actions[cursor]=data.result.action;improvements[cursor]=data.result.improvement;}
+   if(data.result){scores[cursor]=data.result.score;actions[cursor]=data.result.action;}
    setReviewScores(old=>({...old,[cursor]:{score:data.result?.score,depth:data.result?.depth}}));
    cursor++;
    if(cursor>=timeline.length){
     const marks={};
     for(let i=0;i<timeline.length-1;i++){
      if(timeline[i].turn!==humanSide||!Number.isFinite(scores[i])||!Number.isFinite(scores[i+1]))continue;
+     // Compare the best available score before the player's move with the
+     // opponent's best reply score after the move, in the same player's perspective.
      const drop=(humanSide==="sente"?1:-1)*(scores[i]-scores[i+1]);
-     if(drop>=200&&improvements[i]>=120&&actions[i])marks[i]=actions[i];
+     const best=actions[i],actual=timeline[i+1]?.lastMove;
+     const sameMove=best&&actual&&best.category===actual.category&&
+       JSON.stringify(best.to)===JSON.stringify(actual.to)&&
+       JSON.stringify(best.from??null)===JSON.stringify(actual.from??null)&&
+       (best.category!=="drop"||best.piece?.type===timeline[i+1].board[best.to[0]][best.to[1]]?.type);
+     if(drop>=150&&best&&!sameMove)marks[i]=best;
     }
     setReviewMarks(marks);setReviewBusy(false);
     console.info("AI review finished in",Math.round(performance.now()-startedAt),"ms");
