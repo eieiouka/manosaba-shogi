@@ -462,3 +462,7 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
   .app-shell:has(> .manosaba-review-controls){padding-bottom:0}
   .app-shell > .manosaba-review-controls{margin-bottom:0}
 }
+
+/* Result buttons use the Portal-style softly rounded rectangle, not a pill. */
+.result-overlay .result-overlay__actions>.result-overlay__again,
+.result-overlay .result-overlay__actions>.result-overlay__friend{border-radius:12px}
