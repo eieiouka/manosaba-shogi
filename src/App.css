@@ -455,3 +455,9 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 /* Review hand-drop arrow spans the actual hand and board, without a text label. */
 .game-stage{position:relative}
 .review-hand-arrow{position:absolute;inset:0;width:100%;height:100%;z-index:80;pointer-events:none;overflow:visible}
+
+/* Remove only the trailing blank space below mobile AI review controls. */
+@media (max-width:760px) and (hover:none) and (pointer:coarse){
+  .app-shell:has(> .manosaba-review-controls){padding-bottom:0}
+  .app-shell > .manosaba-review-controls{margin-bottom:0}
+}
