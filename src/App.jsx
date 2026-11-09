@@ -192,7 +192,7 @@ export default function App(){
     for(let i=0;i<timeline.length-1;i++){
      if(timeline[i].turn!==humanSide||!Number.isFinite(scores[i])||!Number.isFinite(scores[i+1]))continue;
      const drop=(humanSide==="sente"?1:-1)*(scores[i]-scores[i+1]);
-     if(drop>=400&&improvements[i]>=250&&actions[i])marks[i]=actions[i];
+     if(drop>=200&&improvements[i]>=120&&actions[i])marks[i]=actions[i];
     }
     setReviewMarks(marks);setReviewBusy(false);
     console.info("AI review finished in",Math.round(performance.now()-startedAt),"ms");
