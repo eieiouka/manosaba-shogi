@@ -67,7 +67,7 @@ button { font: inherit; }
 .title-screen__start:hover,.title-screen__shop:hover { transform: translateY(-2px); filter: brightness(1.1); box-shadow:0 14px 34px rgba(0,0,0,.58),0 0 20px rgba(228,187,111,.2); }
 .title-screen__start:active,.title-screen__shop:active { transform: translateY(1px); }
 
-.app-shell { min-height: 100vh; padding: 14px 20px; overflow: hidden; }
+.app-shell { min-height: 100vh; padding: 14px 20px; overflow: hidden; box-sizing: border-box; }
 .topbar {
   width: calc(var(--board-size) + var(--hand-width) + var(--hand-width) + var(--stage-gap) + var(--stage-gap));
   min-height: 68px; margin: 0 auto 8px;
