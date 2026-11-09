@@ -84,6 +84,7 @@ async function ponder(state,seen,token,maxDepth=UNBOUNDED_DEPTH){
 
 self.onmessage=async({data})=>{
   const token=++ponderToken;
+  if(data.type==="review"){try{const result=bestAction(data.state,data.seen||[],11,{timeLimitMs:1100,minDepth:3,tt:sharedTT});self.postMessage({type:"review-result",id:data.id,result})}catch(error){self.postMessage({type:"review-result",id:data.id,error:String(error)})}return}
   if(data.type==="reset"){sharedTT.clear();wasmEngine?.reset_engine?.();fairyWorker?.postMessage({type:"reset"});deepestPonder=1;return}
   if(data.type==="ponder"){
     return; // No pondering for casual CPU.
