@@ -86,18 +86,8 @@ self.onmessage=async({data})=>{
   const token=++ponderToken;
   if(data.type==="review"){
     try{
-      const {valueScore}=await import("./aiEngine.js");
-      const position=data.state,played=data.playedState,side=position.turn;
-      const evaluate=s=>valueScore(s)*(side==="sente"?1:-1);
-      const playedScore=evaluate(played);
-      // Small bounded search only: one recommended move, not a full 11-ply search at every turn.
-      const result=bestAction(position,data.seen||[],3,{timeLimitMs:90,minDepth:1,tt:sharedTT});
-      let bestScore=playedScore;
-      if(result?.action){
-        const {applyLegalAction}=await import("./rules.js");
-        bestScore=evaluate(applyLegalAction(position,result.action));
-      }
-      self.postMessage({type:"review-result",id:data.id,result:{action:result?.action,score:playedScore,playedScore,bestScore}});
+      const result=bestAction(data.state,data.seen||[],11,{timeLimitMs:120,minDepth:1,tt:sharedTT});
+      self.postMessage({type:"review-result",id:data.id,result:{action:result?.action,score:result?.score,depth:result?.depth}});
     }catch(error){self.postMessage({type:"review-result",id:data.id,error:String(error)})}
     return;
   }
