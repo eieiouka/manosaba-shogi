@@ -87,7 +87,15 @@ self.onmessage=async({data})=>{
   if(data.type==="review"){
     try{
       const result=bestAction(data.state,data.seen||[],11,{timeLimitMs:120,minDepth:1,tt:sharedTT});
-      self.postMessage({type:"review-result",id:data.id,result:{action:result?.action,score:result?.score,depth:result?.depth}});
+      let improvement=null;
+      if(result?.action&&data.playedState){
+        const {valueScore}=await import("./aiEngine.js");
+        const {applyLegalAction}=await import("./rules.js");
+        const bestState=applyLegalAction(data.state,result.action);
+        const sign=data.state.turn==="sente"?1:-1;
+        improvement=sign*(valueScore(bestState)-valueScore(data.playedState));
+      }
+      self.postMessage({type:"review-result",id:data.id,result:{action:result?.action,score:result?.score,depth:result?.depth,improvement}});
     }catch(error){self.postMessage({type:"review-result",id:data.id,error:String(error)})}
     return;
   }
