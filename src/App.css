@@ -431,7 +431,7 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .square--capture-target::after { content:""; position:absolute; inset:5px; border-radius:7px; pointer-events:none; border:3px solid #2799ef; box-shadow:inset 0 0 10px rgba(39,153,239,.35); }
 .square--guide-capture { box-shadow:inset 0 0 0 5px rgba(39,153,239,.96),inset 0 0 24px rgba(39,153,239,.55); z-index:4; }
 
-.result-overlay__review{background:#bb2525;color:white;border:2px solid #f36a6a;border-radius:999px;padding:12px 20px;font-weight:900;cursor:pointer}
+.result-overlay__review{color:white;border:2px solid #f36a6a;border-radius:999px;padding:12px 20px;font-weight:900;cursor:pointer}
 .manosaba-review-controls{margin:12px auto;max-width:900px;text-align:center;color:#fff0db;font-weight:800}
 .manosaba-review-buttons{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:8px}
 .manosaba-review-buttons button{background:#34231d;border:1px solid #b99565;color:#fff0db;border-radius:8px;padding:10px;cursor:pointer}
@@ -442,5 +442,3 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .result-overlay__actions{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important;width:min(240px,70vw)!important}
 .result-overlay__actions .result-overlay__again,.result-overlay__actions .result-overlay__friend,.result-overlay__actions .result-overlay__review{display:block;width:100%!important;min-width:0!important;min-height:0!important;padding:10px 14px!important;font-size:clamp(15px,3.5vw,20px)!important;line-height:1.35!important;letter-spacing:.03em!important}
 
-/* Reuse the exact Learning button palette and constrain review button geometry */
-.result-overlay__actions .result-overlay__review.title-screen__learning{background-color:inherit;background-image:inherit}
