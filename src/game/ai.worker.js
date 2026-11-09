@@ -84,7 +84,23 @@ async function ponder(state,seen,token,maxDepth=UNBOUNDED_DEPTH){
 
 self.onmessage=async({data})=>{
   const token=++ponderToken;
-  if(data.type==="review"){try{const result=bestAction(data.state,data.seen||[],11,{timeLimitMs:1100,minDepth:3,tt:sharedTT});self.postMessage({type:"review-result",id:data.id,result})}catch(error){self.postMessage({type:"review-result",id:data.id,error:String(error)})}return}
+  if(data.type==="review"){
+    try{
+      const {valueScore}=await import("./aiEngine.js");
+      const position=data.state,played=data.playedState,side=position.turn;
+      const evaluate=s=>valueScore(s)*(side==="sente"?1:-1);
+      const playedScore=evaluate(played);
+      // Small bounded search only: one recommended move, not a full 11-ply search at every turn.
+      const result=bestAction(position,data.seen||[],3,{timeLimitMs:90,minDepth:1,tt:sharedTT});
+      let bestScore=playedScore;
+      if(result?.action){
+        const {applyLegalAction}=await import("./rules.js");
+        bestScore=evaluate(applyLegalAction(position,result.action));
+      }
+      self.postMessage({type:"review-result",id:data.id,result:{action:result?.action,score:playedScore,playedScore,bestScore}});
+    }catch(error){self.postMessage({type:"review-result",id:data.id,error:String(error)})}
+    return;
+  }
   if(data.type==="reset"){sharedTT.clear();wasmEngine?.reset_engine?.();fairyWorker?.postMessage({type:"reset"});deepestPonder=1;return}
   if(data.type==="ponder"){
     return; // No pondering for casual CPU.
