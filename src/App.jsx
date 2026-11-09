@@ -1121,7 +1121,20 @@ export default function App(){
    <Hand className="hand--player" title="自分の持ち駒" pieces={visibleHand(humanSide)} disabled={reviewMode||onlineBlocked||state.turn!==humanSide||thinking||motionFx||gameOver||learningBoardLocked} activeType={handType} onPick={type=>{if(guideTriggered.current){guideTriggered.current=false;return}if(pieceGuide){setPieceGuide(null);return}setHandType(type);setSelected(null)}} perspective={humanSide} onGuideStart={beginPieceGuide} onGuideEnd={endPieceGuide}/>
    {mode!=="learning"&&<button className="how-to-button" type="button" onClick={()=>setShowHowTo(true)}>How to play</button>}
   </main>
-  {reviewMode&&<div className="manosaba-review-controls"><div>AI解析　{reviewIndex}/{timeline.length-1}手目　{reviewBusy?"解析中…":"解析完了"}　{Number.isFinite(reviewScores[reviewIndex]?.score)?`評価値 ${Math.round(reviewScores[reviewIndex].score)}（${reviewScores[reviewIndex].depth}手読み）`:""}</div><div className="manosaba-review-buttons"><button onClick={()=>jumpReview(-1,true)}>前の悪手 ◀</button><button onClick={()=>jumpReview(-1)}>前の手 ◀</button><button onClick={()=>jumpReview(1)}>次の手 ▶</button><button onClick={()=>jumpReview(1,true)}>次の悪手 ▶</button><button onClick={()=>{setReviewMode(false);setReviewIndex(0)}}>解析終了</button></div></div>}
+  {reviewMode&&<div className="manosaba-review-controls">
+    <div className="manosaba-review-heading">
+      <button type="button" className={`review-nav-arrow ${!reviewBusy&&reviewIndex>0?"review-nav-arrow--ready":""}`} disabled={reviewBusy||reviewIndex===0} onClick={()=>jumpReview(-1)} aria-label="前の手">◀</button>
+      <span>AI解析　{reviewIndex}/{timeline.length-1}手目　{Number.isFinite(reviewScores[reviewIndex]?.score)?`評価値 ${Math.round(reviewScores[reviewIndex].score)}`:""}</span>
+      <button type="button" className={`review-nav-arrow ${!reviewBusy&&reviewIndex<timeline.length-1?"review-nav-arrow--ready":""}`} disabled={reviewBusy||reviewIndex>=timeline.length-1} onClick={()=>jumpReview(1)} aria-label="次の手">▶</button>
+    </div>
+    <div className="manosaba-review-buttons">
+      <button disabled={reviewBusy||!Object.keys(reviewMarks).some(k=>Number(k)<reviewIndex)} onClick={()=>jumpReview(-1,true)}>前の悪手 ◀</button>
+      <button disabled={reviewBusy||reviewIndex===0} onClick={()=>jumpReview(-1)}>前の手 ◀</button>
+      <button disabled={reviewBusy||reviewIndex>=timeline.length-1} onClick={()=>jumpReview(1)}>次の手 ▶</button>
+      <button disabled={reviewBusy||!Object.keys(reviewMarks).some(k=>Number(k)>reviewIndex)} onClick={()=>jumpReview(1,true)}>次の悪手 ▶</button>
+      <button onClick={()=>{setReviewMode(false);setReviewIndex(0)}}>解析終了</button>
+    </div>
+   </div>}
    {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
   {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&(!learningLevel.scenes[sceneIndex]?.autoMove&&!learningLevel.scenes[sceneIndex]?.autoSequence||sceneAutoDone))||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
   {mode==="learning"&&learningChapterSelect&&<LearningChapterSelect levels={LEARNING_LEVELS} currentIndex={learningLevelIndex} onSelect={requestLearningLevel} onTitle={()=>setConfirmLearningBack(true)} onClose={()=>setLearningChapterSelect(false)}/>}
