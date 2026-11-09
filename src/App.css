@@ -434,7 +434,7 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 /* Keep original button padding/font/radius, but prevent CSS grid stretching them into circles. */
 .result-overlay__panel{align-content:center;grid-template-rows:max-content max-content;justify-items:center}
 .result-overlay__actions{display:flex;flex-direction:column;align-items:center;justify-content:center;width:max-content;max-width:100%;gap:clamp(8px,1.5vw,16px)}
-.result-overlay__actions>.result-overlay__again,.result-overlay__actions>.result-overlay__friend{display:block;box-sizing:border-box;flex:none;align-self:center;width:clamp(150px,24vw,230px);height:auto;min-height:0;aspect-ratio:auto;margin:0}
+.result-overlay__actions>.result-overlay__again,.result-overlay__actions>.result-overlay__friend{display:block;box-sizing:border-box;flex:none;align-self:center;width:max-content;max-width:100%;height:max-content;min-height:0;aspect-ratio:auto;margin:0}
 @media(max-width:760px) and (hover:none) and (pointer:coarse){.result-overlay__actions{display:flex;width:min(70vw,260px);gap:3vw}.result-overlay__actions>.result-overlay__again,.result-overlay__actions>.result-overlay__friend{width:100%;height:auto;min-width:0}}
 .result-overlay__review{background:linear-gradient(135deg,#f4c5c4 0%,#cf8c93 52%,#b76d7e 100%);color:#241315;border-color:#e9b6b7}
 .result-overlay::before{inset:16% 4%}
