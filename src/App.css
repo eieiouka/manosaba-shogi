@@ -430,3 +430,10 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 /* Sherry capture-only diagonals: blue in both selection and long-press guide. */
 .square--capture-target::after { content:""; position:absolute; inset:5px; border-radius:7px; pointer-events:none; border:3px solid #2799ef; box-shadow:inset 0 0 10px rgba(39,153,239,.35); }
 .square--guide-capture { box-shadow:inset 0 0 0 5px rgba(39,153,239,.96),inset 0 0 24px rgba(39,153,239,.55); z-index:4; }
+
+.result-overlay__review{background:#bb2525;color:white;border:2px solid #f36a6a;border-radius:999px;padding:12px 20px;font-weight:900;cursor:pointer}
+.manosaba-review-controls{margin:12px auto;max-width:900px;text-align:center;color:#fff0db;font-weight:800}
+.manosaba-review-buttons{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-top:8px}
+.manosaba-review-buttons button{background:#34231d;border:1px solid #b99565;color:#fff0db;border-radius:8px;padding:10px;cursor:pointer}
+.review-best-arrow{position:absolute;inset:0;z-index:65;width:100%;height:100%;pointer-events:none}
+@media(max-width:760px){.result-overlay__actions{flex-wrap:wrap}.result-overlay__review{font-size:14px;padding:10px}.manosaba-review-buttons button{font-size:12px;padding:8px 5px}}
