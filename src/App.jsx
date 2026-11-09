@@ -1148,7 +1148,7 @@ export default function App(){
       <button className={!reviewBusy&&reviewIndex<timeline.length-1?"review-button--ready":""} disabled={reviewBusy||reviewIndex>=timeline.length-1} onClick={()=>jumpReview(1)}>次の手 ▶</button>
       <button className={!reviewBusy&&Object.keys(reviewMarks).some(k=>Number(k)>reviewIndex)?"review-button--ready":""} disabled={reviewBusy||!Object.keys(reviewMarks).some(k=>Number(k)>reviewIndex)} onClick={()=>jumpReview(1,true)}>次の悪手 ▶</button>
     </div>
-    <div className="manosaba-review-footer"><span>{reviewIndex}/{timeline.length-1}手目{Number.isFinite(reviewScores[reviewIndex]?.score)?`　評価値 ${Math.round(reviewScores[reviewIndex].score)}`:""}</span><button onClick={()=>{setReviewMode(false);setReviewIndex(0)}}>解析終了</button></div>
+    <div className="manosaba-review-footer"><span>{reviewIndex}/{timeline.length-1}手目</span><button onClick={()=>{setReviewMode(false);setReviewIndex(0)}}>解析終了</button></div>
    </div>}
    {backgroundQueueMode&&online.status==='naming'&&<OnlineLobby online={online}/>}
   {mode==="learning"&&<LearningDialogue lines={learningLines} page={learningDialogue} outcome={learningOutcome} onPrevious={previousLearningPage} onNext={advanceLearningDialogue} navigationLocked={learningAutoMoving} allowFinishAdvance={Boolean(learningOutcome?.kind==="afterMove"||(learningLevel.scenes&&!learningOutcome&&!learningLevel.scenes[sceneIndex]?.correct?.length&&(!learningLevel.scenes[sceneIndex]?.autoMove&&!learningLevel.scenes[sceneIndex]?.autoSequence||sceneAutoDone))||(learningLevel.steps&&!learningOutcome&&learningHistory.length===learningLevel.steps.length))} onRetry={retryLearningMove} onNextChapter={advanceLearningChapter}/>}
