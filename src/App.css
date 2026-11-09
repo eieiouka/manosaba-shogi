@@ -451,3 +451,7 @@ h1 { margin: 3px 0 0; font-family: Georgia, "Noto Serif JP", serif; font-size: c
 .manosaba-review-footer button{padding:5px 12px;border:1px solid #9e8056;border-radius:6px;background:#30251e;color:#fff0d5;font-size:12px;cursor:pointer}
 .review-best-arrow{position:absolute;inset:0;z-index:65;width:100%;height:100%;pointer-events:none}
 @media(max-width:760px){.manosaba-review-buttons{gap:5px}.manosaba-review-buttons button{min-width:0;padding:7px 8px;font-size:12px}}
+
+/* Review hand-drop arrow spans the actual hand and board, without a text label. */
+.game-stage{position:relative}
+.review-hand-arrow{position:absolute;inset:0;width:100%;height:100%;z-index:80;pointer-events:none;overflow:visible}
