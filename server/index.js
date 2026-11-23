@@ -71,7 +71,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
   }
  };
  const removeQueue=p=>{const i=queue.indexOf(p);if(i>=0)queue.splice(i,1);p.queued=false;p.queueMode=null;refreshLone()};
- const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames,profiles:Object.fromEntries(m.players.map((p,i)=>[i===0?'sente':'gote',profiles.view(p.profile)])),ratingChanges:m.ratingChanges,rankError:m.rankError});
+ const snapshot=m=>({type:'match',id:m.id,state:m.state,revision:m.revision,result:m.result,...(m.result?{timeline:m.timeline}:{}),deadline:m.deadline,readyAt:m.readyAt,paused:m.paused,nicknames:m.nicknames,profiles:Object.fromEntries(m.players.map((p,i)=>[i===0?'sente':'gote',profiles.view(p.profile)])),ratingChanges:m.ratingChanges,rankError:m.rankError});
  const broadcast=(m,extra={})=>m.players.forEach((p,i)=>send(p,{...snapshot(m),side:i===0?'sente':'gote',...extra}));
  const finish=(m,winner,reason)=>{if(m.result)return;m.result={winner,reason};m.deadline=null;m.readyAt=null;m.paused=false;m.finishedAt=Date.now();updateRanks(m);broadcast(m);history.end(m);refreshLone()};
  const settle=m=>{if(!m.result&&!m.paused&&Date.now()>=m.deadline)finish(m,opposite(m.state.turn),'timeout')};
@@ -79,7 +79,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
  const resume=m=>{if(m.result||!m.paused||m.players.some(p=>!p.stream))return;m.readyAt=Date.now()+m.delay;m.deadline=m.readyAt+m.remaining;m.paused=false;broadcast(m)};
   const createPairMatch=players=>{
    const state=makeInitialState(),readyAt=Date.now()+startDelayMs;
-   const m={id:randomUUID(),startedAt:Date.now(),players,nicknames:{sente:players[0].nickname,gote:players[1].nickname},state,revision:0,result:null,readyAt,deadline:readyAt+turnMs,paused:false,seen:new Map([[key(state),1]])};
+   const m={id:randomUUID(),startedAt:Date.now(),players,nicknames:{sente:players[0].nickname,gote:players[1].nickname},state,timeline:[state],revision:0,result:null,readyAt,deadline:readyAt+turnMs,paused:false,seen:new Map([[key(state),1]])};
    matches.set(m.id,m);history.start(m);players.forEach(p=>p.match=m);broadcast(m);refreshLone();return m;
   };
  const match=()=>{while(queue.length>=2){const a=queue.shift(),b=queue.shift();a.queued=b.queued=false;a.queueMode=b.queueMode=null;a.queueMode=b.queueMode=null;const players=randomInt(2)?[a,b]:[b,a];createPairMatch(players)}refreshLone()};
@@ -243,7 +243,7 @@ export function createGameServer({origins=['http://localhost:5173'],turnMs=30000
   const action=generateAllLegalActions(m.state).find(a=>signature(a)===signature(body.action));
   if(!action){json(400,{error:'不正な指し手です'});return}
   history.move(m,side,action);
-  m.state=applyLegalAction(m.state,action);m.revision++;m.result=terminalResult(m.state);
+  m.state=applyLegalAction(m.state,action);m.timeline.push(m.state);m.revision++;m.result=terminalResult(m.state);
   const k=key(m.state),count=(m.seen.get(k)||0)+1;m.seen.set(k,count);if(!m.result&&count>=3)m.result={winner:null,reason:'repetition'};
   m.readyAt=Date.now()+animationMs;m.deadline=m.result?null:m.readyAt+turnMs;if(m.result){m.finishedAt=Date.now();updateRanks(m);history.end(m)}refreshLone();broadcast(m,{action});json(200,{ok:true});
  });
