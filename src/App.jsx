@@ -46,8 +46,8 @@ const randomSide=()=>Math.random()<.5?"sente":"gote";
 const HAND_ORDER=["sherry","hanna","hiro","nanoka","margo"];
 const DIFFICULTIES=[
  {label:"簡単",depth:3},
- {label:"普通",depth:5},
  {label:"難しい",depth:15},
+ {label:"最強",depth:19},
 ];
 const PIECE_GUIDES={
  ema:{move:"8方向に1マス移動できます。",magicName:"魔女殺し",magic:"相手側の最下段へ到達すると、魔女化して相手のエマを殺せます（勝利）。"},
@@ -472,7 +472,7 @@ export default function App(){
  },[result,finishFxDone,humanSide]);
  useEffect(()=>{
   if(mode==="online"||mode==="learning"||reviewMode||!started||gameOver||!worker.current)return;
-  if(state.turn===humanSide){worker.current.postMessage({type:"ponder",state,seen,openingActive:openingActive&&cpuOwnMoves<5,cpuOwnMoves,minDepth:difficultyDepth,...((waitingCpu||difficultyDepth===1||difficultyDepth===5)?{maxDepth:waitingCpu?5:difficultyDepth}:{})});return}
+  if(state.turn===humanSide)return;
   setThinking(true);
   const id=++request.current;
   const effectEndsAt=Math.max(performance.now(),motionFxRef.current?.endsAt??0);
@@ -492,7 +492,7 @@ export default function App(){
    waitForFx();
   };
   const effectRemainingMs=Math.max(0,effectEndsAt-performance.now());
-  worker.current.postMessage({type:"think",id,state,seen,openingActive:openingActive&&cpuOwnMoves<5,cpuOwnMoves,timeLimitMs:effectRemainingMs+1000,minDepth:difficultyDepth,...((waitingCpu||difficultyDepth===1||difficultyDepth===5)?{maxDepth:waitingCpu?5:difficultyDepth}:{})});
+  worker.current.postMessage({type:"think",id,state,seen,openingActive:openingActive&&cpuOwnMoves<5,cpuOwnMoves,timeLimitMs:effectRemainingMs+1000,minDepth:difficultyDepth,...(difficultyDepth===19?{maxDepth:19}:((waitingCpu||difficultyDepth===1||difficultyDepth===5)?{maxDepth:waitingCpu?5:difficultyDepth}:{}))});
  },[state,gameOver,seen,humanSide,started,difficultyDepth,mode,waitingCpu]);
 
  // 正解後の解説を終えた場合も、通常の正解手と同じ共通処理で次のシーンへ。
